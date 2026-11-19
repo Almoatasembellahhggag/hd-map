@@ -6,8 +6,71 @@
 /* Shop names and their stories live in stories.js (window.SHOPS). */
 const SHOPS = window.SHOPS;
 
+/* ───────────── Two layouts of the same town ─────────────
+   WIDE for computers and tablets. TALL for a phone held upright: the same buildings
+   stacked top to bottom, so the whole town fits the screen. Everything that has a
+   position on the map is listed here; coordinates are in map pixels. */
+const forcedLayout = new URLSearchParams(location.search).get('layout');       // ?layout=tall or ?layout=wide
+const PORTRAIT_PHONE = '(orientation: portrait) and (max-width: 720px)';
+const TALL = forcedLayout ? forcedLayout === 'tall' : matchMedia(PORTRAIT_PHONE).matches;
+const LAYOUT = TALL ? {
+  WT: 34, HT: 70,                                   // map size in 16-pixel tiles
+  peak: 240, fall: 220,                             // mountain: x of the summit, how fast the sides drop
+  clouds: [[90, 62, .8], [330, 30, .6], [480, 92, .7]],
+  trails: [                                         // walkable way up to the castle: [x, y, w, h, kind]
+    [64, 168, 352, 16, 'terrace'], [64, 184, 32, 24, 'stairs'], [64, 208, 368, 16, 'path'], [400, 224, 32, 24, 'stairs'],
+    [256, 248, 176, 16, 'path'], [256, 264, 32, 32, 'stairs'], [256, 296, 32, 24, 'path'],
+  ],
+  castle: [-544, 40], uni: [-240, 16], church: [-96, 496],          // how far each landmark is moved from where it was drawn
+  plaza: [96, 464, 352, 168, 34], fountain: [272, 552],
+  meadows: [],
+  river: [816, 208], bridge: 248, piers: [28, 72, 116, 160],        // river [y, height], x of the bridge deck
+  shops: {
+    books: { x: 48, y: 352, w: 96, h: 112, door: { x: 96, y: 464 } },       // left of the university
+    cinema: { x: 400, y: 368, w: 112, h: 96, door: { x: 456, y: 464 } },    // right of the university
+    vinyl: { x: 64, y: 680, w: 96, h: 104, door: { x: 135, y: 784 } },      // down by the river
+  },
+  houses: [[608, [[1, 4], [29, 4]], 44, [72, 80]]],                 // [street line, [[tile x, tiles wide], …], seed, heights]
+  lamps: [[216, 528], [328, 528], [216, 592], [328, 592], [40, 814], [200, 814], [344, 814], [504, 814]],
+  benches: [[120, 576], [408, 576], [176, 808], [352, 808], [184, 1048], [344, 1048], [128, 184], [336, 184]],
+  trees: [[116, 512], [428, 512], [116, 616], [428, 616], [188, 776], [36, 776], [508, 776], [60, 1048], [140, 1048], [412, 1048], [484, 1048]],
+  boats: [[66, 892], [172, 952], [66, 1012], [478, 892], [372, 952], [478, 1012]],     // [centre x, waterline y]
+  swans: [[130, 872, 0], [420, 1002, 2]],
+  start: [272, 1068],
+} : {
+  WT: 64, HT: 51,
+  peak: 416, fall: 362,
+  clouds: [[120, 60, 1], [300, 34, .7], [820, 52, 1], [950, 112, .6], [690, 24, .5]],
+  trails: [
+    [240, 168, 352, 16, 'terrace'], [240, 184, 32, 24, 'stairs'], [240, 208, 368, 16, 'path'], [576, 224, 32, 24, 'stairs'],
+    [496, 248, 112, 16, 'path'], [496, 264, 32, 32, 'stairs'], [496, 296, 32, 24, 'path'],
+  ],
+  castle: [-368, 40], uni: [0, 0], church: [304, 160],
+  plaza: [320, 448, 384, 152, 34], fountain: [512, 536],
+  meadows: [[[262, 410, 36], [246, 428, 26], [278, 400, 22]], [[256, 552, 40], [228, 566, 24], [282, 538, 26]]],
+  river: [624, 96], bridge: 480, piers: [28, 66],
+  shops: {
+    books: { x: 304, y: 336, w: 96, h: 112, door: { x: 352, y: 448 } },    // on the university square
+    cinema: { x: 96, y: 352, w: 112, h: 96, door: { x: 152, y: 448 } },    // west end of the main street
+    vinyl: { x: 848, y: 488, w: 96, h: 104, door: { x: 919, y: 592 } },    // east end of the riverside
+  },
+  houses: [[448, [[2, 3], [57, 4]], 42, [72, 80, 88]], [592, [[2, 4], [8, 4], [46, 4]], 43, [72, 80, 88, 96]]],
+  lamps: [[456, 512], [568, 512], [456, 576], [568, 576], [176, 622], [400, 622], [624, 622], [848, 622]],
+  benches: [[352, 544], [656, 544], [224, 616], [768, 616], [432, 744], [560, 744], [304, 184], [512, 184]],
+  trees: [
+    [340, 520], [340, 576], [684, 520], [684, 576],              // university square
+    [644, 432], [700, 440],                                      // beside the university
+    [244, 408], [276, 432], [228, 544], [276, 536], [252, 576],  // the two greens
+    [820, 584], [972, 576],                                      // beside the record store
+    [60, 744], [236, 744], [380, 744], [700, 744], [892, 744],   // far bank
+  ],
+  boats: [[78, 698], [232, 712], [386, 698], [620, 712], [774, 698], [928, 712]],
+  swans: [[150, 664, 0], [438, 700, 2], [716, 664, 4]],
+  start: [504, 762],
+};
+
 /* ───────────── Basics ───────────── */
-const T = 16, WT = 64, HT = 51, W = WT * T, H = HT * T;
+const T = 16, { WT, HT } = LAYOUT, W = WT * T, H = HT * T;
 const CELL = 8, CW = W / CELL, CH = H / CELL;
 const SPEED = 125;   // walking speed in map pixels per second
 
@@ -212,28 +275,21 @@ function boat(x, y, c) {
   px(b, '#3a2a2e', x + 7, y + 1, 1, 4); px(b, '#3a2a2e', x + 12, y + 1, 1, 4);
 }
 
-/* the castle mountain: its summit sits left of centre */
-const PEAK = 416;
+/* the castle mountain */
+const PEAK = LAYOUT.peak;
 /* height of the ridge line at a given x */
-const ridge = x => Math.round(120 + (1 - Math.cos(Math.min(1, Math.max(0, Math.abs(x - PEAK) - 150) / 362) * Math.PI)) / 2 * 140);
+const ridge = x => Math.round(120 + (1 - Math.cos(Math.min(1, Math.max(0, Math.abs(x - PEAK) - 150) / LAYOUT.fall) * Math.PI)) / 2 * 140);
 /* rock ledges that step the slope (flat in the middle, curving up towards the sides) */
 const ledge = (yc, rise) => x => Math.round(yc - rise * Math.pow(Math.max(0, (Math.abs(x - PEAK) - 240) / 272), 2));
 const LEDGES = [ledge(232, 40), ledge(280, 30)];
-/* the walkable trail from the town up to the castle: [x, y, w, h, kind] */
-const TRAILS = [
-  [240, 168, 352, 16, 'terrace'],
-  [240, 184, 32, 24, 'stairs'],
-  [240, 208, 368, 16, 'path'],
-  [576, 224, 32, 24, 'stairs'],
-  [496, 248, 112, 16, 'path'],
-  [496, 264, 32, 32, 'stairs'],
-  [496, 296, 32, 24, 'path'],
-];
+/* the walkable trail from the town up to the castle */
+const TRAILS = LAYOUT.trails;
 
 function paintTerrain() {
+  const [RY, RH] = LAYOUT.river, BX = LAYOUT.bridge, BKY = RY + RH;     // river top and height, bridge x, far bank y
   // sky and clouds behind the mountain
   ['#a9d3ee', '#b7dbf0', '#c6e3f2', '#d5ebf4', '#e3f1f4', '#e9f4f3'].forEach((c, i) => px(b, c, 0, i * 54, W, 54));
-  for (const [cx, cy, k] of [[120, 60, 1], [300, 34, .7], [820, 52, 1], [950, 112, .6], [690, 24, .5]]) {
+  for (const [cx, cy, k] of LAYOUT.clouds) {
     px(b, '#fafdff', cx - 22 * k, cy, 44 * k, 6); px(b, '#fafdff', cx - 12 * k, cy - 5, 26 * k, 5);
     px(b, '#fafdff', cx - 30 * k, cy + 4, 60 * k, 4); px(b, '#e2eef4', cx - 30 * k, cy + 8, 60 * k, 2);
   }
@@ -243,7 +299,7 @@ function paintTerrain() {
     px(b, '#a8c6b6', x, far, 1, 320 - far);
     px(b, P.hill, x, top, 1, 320 - top); px(b, shade(P.hill, 1.18), x, top, 1, 2);
   }
-  for (let i = 0; i < 2600; i++) {
+  for (let i = 0; i < Math.round(W * 2600 / 1024); i++) {
     const x = R() * W | 0, y = ridge(x) + 3 + (R() * (314 - ridge(x)) | 0);
     px(b, shade(P.hill, R() < .6 ? .88 : 1.12), x, y, 1, 2);
   }
@@ -266,37 +322,36 @@ function paintTerrain() {
   }
 
   // old town
-  cobble(0, 320, W, 304);
+  cobble(0, 320, W, RY - 320);
   // university square: rounded paving with a ring around the fountain
-  cobbleShape(320, 448, 704, 600, (x, y) => inRounded(x, y, 320, 448, 384, 152, 34), P.plaza);
-  for (let y = 502; y <= 570; y++) for (let x = 456; x <= 568; x++) {
-    const d = ((x - 512) / 56) ** 2 + ((y - 536) / 34) ** 2;
+  const [qx, qy, qw, qh, qr] = LAYOUT.plaza, [fx, fy] = LAYOUT.fountain;
+  cobbleShape(qx, qy, qx + qw, qy + qh, (x, y) => inRounded(x, y, qx, qy, qw, qh, qr), P.plaza);
+  for (let y = fy - 34; y <= fy + 34; y++) for (let x = fx - 56; x <= fx + 56; x++) {
+    const d = ((x - fx) / 56) ** 2 + ((y - fy) / 34) ** 2;
     if (d <= 1 && d > .9) px(b, shade(P.plaza, .82), x, y);
   }
-  // two small greens with soft edges
-  meadow([[262, 410, 36], [246, 428, 26], [278, 400, 22]]);
-  meadow([[256, 552, 40], [228, 566, 24], [282, 538, 26]]);
+  // small greens with soft edges
+  for (const circles of LAYOUT.meadows) meadow(circles);
 
   // river
-  px(b, P.water, 0, 624, W, 96);
-  px(b, P.waterD, 0, 636, W, 6);
-  speckle(b, 0, 644, W, 72, [P.waterD], .004, 8, 1);
-  speckle(b, 0, 644, W, 72, [P.waterL], .002, 5, 1);
+  px(b, P.water, 0, RY, W, RH);
+  px(b, P.waterD, 0, RY + 12, W, 6);
+  speckle(b, 0, RY + 20, W, RH - 24, [P.waterD], .004, 8, 1);
+  speckle(b, 0, RY + 20, W, RH - 24, [P.waterL], .002, 5, 1);
   // quay wall
-  px(b, P.stoneL, 0, 622, W, 2);
-  px(b, P.stone, 0, 624, W, 10);
-  for (let xx = 0; xx < W; xx += 10) { px(b, P.stoneD, xx, 624, 1, 5); px(b, P.stoneD, xx + 5, 629, 1, 5); }
-  px(b, P.stoneD, 0, 628, W, 1); px(b, '#2c5f8a', 0, 634, W, 2);
-  boat(150, 640, '#8f6243'); boat(880, 640, '#c0392b');
+  px(b, P.stoneL, 0, RY - 2, W, 2);
+  px(b, P.stone, 0, RY, W, 10);
+  for (let xx = 0; xx < W; xx += 10) { px(b, P.stoneD, xx, RY, 1, 5); px(b, P.stoneD, xx + 5, RY + 5, 1, 5); }
+  px(b, P.stoneD, 0, RY + 4, W, 1); px(b, '#2c5f8a', 0, RY + 10, W, 2);
 
-  // near bank
-  grass(0, 720, W, 96);
-  const pathY = x => Math.round(755 + 5 * Math.sin(x / 80) + 2 * Math.sin(x / 23));
-  px(b, P.path, 480, 728, 48, 40);
+  // far bank
+  grass(0, BKY, W, 96);
+  const pathY = x => Math.round(BKY + 35 + 5 * Math.sin(x / 80) + 2 * Math.sin(x / 23));
+  px(b, P.path, BX, BKY + 8, 48, 40);
   for (let x = 0; x < W; x++) {
     const e = Math.round(3 + 2.5 * Math.sin(x / 37) + 1.5 * Math.sin(x / 11 + 2));     // wavy shoreline
-    px(b, P.water, x, 720, 1, e); px(b, '#2c5f8a', x, 720 + e - 1, 1, 1); px(b, '#8a7a55', x, 720 + e, 1, 2);
-    if (R() < .3) px(b, R() < .5 ? '#4f8a45' : '#6aa84f', x, 718 + e, 1, 3);
+    px(b, P.water, x, BKY, 1, e); px(b, '#2c5f8a', x, BKY + e - 1, 1, 1); px(b, '#8a7a55', x, BKY + e, 1, 2);
+    if (R() < .3) px(b, R() < .5 ? '#4f8a45' : '#6aa84f', x, BKY - 2 + e, 1, 3);
     if (x >= 16 && x < W - 16) {                                                         // meandering footpath
       const y = pathY(x);
       px(b, P.path, x, y, 1, 13); px(b, shade(P.path, .8), x, y + 13, 1, 1);
@@ -305,18 +360,18 @@ function paintTerrain() {
   }
 
   // old bridge
-  for (const y of [652, 690]) {               // pier cutwaters
+  for (const o of LAYOUT.piers) {             // pier cutwaters
     const ws = [2, 4, 6, 8, 9, 10, 9, 8, 6, 4, 2];
     ws.forEach((w, i) => {
       const c = i < 6 ? P.sandL : P.sandD;
-      px(b, c, 476 - w, y + i, w, 1); px(b, c, 532, y + i, w, 1);
+      px(b, c, BX - 4 - w, RY + o + i, w, 1); px(b, c, BX + 52, RY + o + i, w, 1);
     });
   }
-  px(b, 'rgba(20,30,70,.28)', 532, 638, 7, 82);
-  cobble(480, 624, 48, 104, '#cbb49a');
-  px(b, P.sandL, 476, 630, 4, 94); px(b, P.sandD, 479, 630, 1, 94);
-  px(b, P.sandL, 528, 630, 4, 94); px(b, P.sandXD, 528, 630, 1, 94);
-  for (let yy = 630; yy < 724; yy += 14) { px(b, P.sandD, 476, yy, 4, 1); px(b, P.sandD, 528, yy, 4, 1); }
+  px(b, 'rgba(20,30,70,.28)', BX + 52, RY + 14, 7, RH - 14);
+  cobble(BX, RY, 48, RH + 8, '#cbb49a');
+  px(b, P.sandL, BX - 4, RY + 6, 4, RH - 2); px(b, P.sandD, BX - 1, RY + 6, 1, RH - 2);
+  px(b, P.sandL, BX + 48, RY + 6, 4, RH - 2); px(b, P.sandXD, BX + 48, RY + 6, 1, RH - 2);
+  for (let yy = RY + 6; yy < RY + RH + 4; yy += 14) { px(b, P.sandD, BX - 4, yy, 4, 1); px(b, P.sandD, BX + 48, yy, 4, 1); }
 
   // cinema red carpet
   const cin = shopGeo.cinema, cy = cin.y + cin.h;
@@ -324,9 +379,9 @@ function paintTerrain() {
 
   // river sparkles
   const r = rng(21);
-  for (let i = 0; i < 130; i++) {
-    const x = 20 + r() * (W - 40) | 0, y = 646 + r() * 68 | 0;
-    if (x > 462 && x < 546) continue;
+  for (let i = 0; i < Math.round(W * RH / 756); i++) {
+    const x = 20 + r() * (W - 40) | 0, y = RY + 22 + r() * (RH - 28) | 0;
+    if (x > BX - 18 && x < BX + 66) continue;
     shimmer.push({ x, y, ph: r() * 6.28, w: 3 + (r() * 4 | 0) });
   }
 }
@@ -498,11 +553,7 @@ function rowHouses(bottom, segs, seed, heights) {
 
 /* ───────────── The three story places ─────────────
    Bigger than the houses, each in one strong colour, with a huge sign on top. */
-const shopGeo = {
-  books: { x: 304, y: 336, w: 96, h: 112, door: { x: 352, y: 448 } },    // on the university square
-  cinema: { x: 96, y: 352, w: 112, h: 96, door: { x: 152, y: 448 } },    // west end of the main street
-  vinyl: { x: 848, y: 488, w: 96, h: 104, door: { x: 919, y: 592 } },    // east end of the riverside
-};
+const shopGeo = LAYOUT.shops;
 const shopObjs = {};
 
 function bookstore() {
@@ -793,10 +844,10 @@ function castle(dx, dy) {
   });
 }
 
-function bridgeGate(dy) {
+function bridgeGate(dx, dy) {
   const tower = tx => {
-    block(tx, 448 + dy, 16, 32);
-    addObjAt(0, dy, tx - 3, 380, 22, 98, 476, g => {
+    block(tx + dx, 448 + dy, 16, 32);
+    addObjAt(dx, dy, tx - 3, 380, 22, 98, 476, g => {
       px(g, '#efe6d2', tx, 424, 16, 44); px(g, '#fbf6ea', tx, 424, 3, 44); px(g, '#d3c7ae', tx + 11, 424, 5, 44);
       px(g, P.sand, tx - 1, 466, 18, 10); px(g, P.sandD, tx + 11, 466, 6, 10); px(g, P.sandL, tx - 1, 466, 18, 1);
       px(g, P.sand, tx, 440, 16, 2); px(g, P.glass, tx + 6, 430, 3, 6); px(g, P.glass, tx + 6, 447, 3, 7);
@@ -809,7 +860,7 @@ function bridgeGate(dy) {
     });
   };
   tower(464); tower(528);
-  addObjAt(0, dy, 478, 418, 52, 30, 476, g => {
+  addObjAt(dx, dy, 478, 418, 52, 30, 476, g => {
     px(g, '#333c4f', 478, 420, 52, 3);
     px(g, P.sand, 480, 423, 48, 12); px(g, P.sandL, 480, 423, 48, 1); px(g, P.sandD, 480, 433, 48, 2);
     px(g, P.sand, 480, 435, 10, 3); px(g, P.sand, 518, 435, 10, 3);
@@ -835,11 +886,11 @@ function fountain(cx, cy) {
   });
 }
 /* the Old University on the north side of the square */
-function oldUniversity() {
+function oldUniversity(dx, dy) {
   const x = 416, B = 448, w = 192, cx = x + w / 2, wall = '#efe2c8', S = P.sand, SD = P.sandD, SL = P.sandL;
-  block(x, 368, w, 80);
-  shadows.push([x, B, w, 3]);
-  addObj(x - 4, 300, w + 8, 150, B, g => {
+  block(x + dx, 368 + dy, w, 80);
+  shadows.push([x + dx, B + dy, w, 3]);
+  addObjAt(dx, dy, x - 4, 300, w + 8, 150, B, g => {
     // hipped slate roof with dormers
     for (let i = 0; i < 42; i++) {
       const inset = Math.round((41 - i) * 22 / 41), yy = 338 + i;
@@ -933,39 +984,31 @@ function forecourt(cx, cy, rx, ry, col) {
 
 function build() {
   paintTerrain();
+  const [RY, RH] = LAYOUT.river, BX = LAYOUT.bridge, BKY = RY + RH;
 
   // edges of the world
   block(0, 0, 16, H); block(W - 16, 0, 16, H);
-  block(16, 624, 464, 96); block(528, 624, W - 544, 96);       // river (bridge deck stays open)
-  block(0, 0, W, 320);                                           // the mountain …
-  for (const [x, y, w, h] of TRAILS) block(x, y, w, h, 0);       // … except the trail up to the castle
+  block(16, RY, BX - 16, RH); block(BX + 48, RY, W - 64 - BX, RH);   // river (bridge deck stays open)
+  block(0, 0, W, 320);                                               // the mountain …
+  for (const [x, y, w, h] of TRAILS) block(x, y, w, h, 0);           // … except the trail up to the castle
 
   // woods
   mountainWoods();
-  forest(16, 784, 992, 32, 10, .15);
-  forest(0, 320, 16, 304, 11); forest(W - 16, 320, 16, 304, 12);
-  forest(0, 720, 16, 96, 13); forest(W - 16, 720, 16, 96, 14);
+  forest(16, BKY + 64, W - 32, 32, 10, .15);
+  forest(0, 320, 16, RY - 320, 11); forest(W - 16, 320, 16, RY - 320, 12);
+  forest(0, BKY, 16, 96, 13); forest(W - 16, BKY, 16, 96, 14);
 
   // a handful of houses, with room between them
-  rowHouses(448, [[2, 3], [57, 4]], 42, [72, 80, 88]);
-  rowHouses(592, [[2, 4], [8, 4], [46, 4]], 43, [72, 80, 88, 96]);
+  for (const [street, segs, seed, heights] of LAYOUT.houses) rowHouses(street, segs, seed, heights);
   bookstore(); cinema(); vinylShop();
   for (const id in shopGeo) shopObjs[id] = objs.find(o => o.x === shopGeo[id].x - 2 && o.y === shopGeo[id].y - 10);
 
   // landmarks
-  castle(-368, 40); oldUniversity(); church(304, 160); bridgeGate(160);
-  fountain(512, 536);
-  for (const [x, y] of [[456, 512], [568, 512], [456, 576], [568, 576]]) lamp(x, y);
-  for (const x of [176, 400, 624, 848]) lamp(x, 622);
-  bench(352, 544); bench(656, 544); bench(224, 616); bench(768, 616);
-  bench(432, 744); bench(560, 744); bench(304, 184); bench(512, 184);
-  for (const [x, y] of [
-    [340, 520], [340, 576], [684, 520], [684, 576],              // university square
-    [644, 432], [700, 440],                                      // beside the university
-    [244, 408], [276, 432], [228, 544], [276, 536], [252, 576],  // the two greens
-    [820, 584], [972, 576],                                      // beside the record store
-    [60, 744], [236, 744], [380, 744], [700, 744], [892, 744],   // far bank
-  ]) tree(x, y, false);
+  castle(...LAYOUT.castle); oldUniversity(...LAYOUT.uni); church(...LAYOUT.church); bridgeGate(BX - 480, RY - 464);
+  fountain(...LAYOUT.fountain);
+  for (const [x, y] of LAYOUT.lamps) lamp(x, y);
+  for (const [x, y] of LAYOUT.benches) bench(x, y);
+  for (const [x, y] of LAYOUT.trees) tree(x, y, false);
 
   // flatten everything onto the base map, back to front
   for (const [x, y, w, h] of shadows) px(b, 'rgba(30,20,40,.2)', x, y, w, h);
@@ -997,7 +1040,7 @@ function iconEl(id) {
 
 /* ───────────── The spirit (you) ─────────────
    A little ghost doodle: a round head and three legs. It collects stories. */
-const p = { x: 504, y: 762, dir: 'd', walk: 0, moving: false };
+const p = { x: LAYOUT.start[0], y: LAYOUT.start[1], dir: 'd', walk: 0, moving: false };
 let route = null, stuck = 0, lastRouted = 0;   // route = list of points the spirit is walking along
 
 function canStand(x, y) {
@@ -1086,7 +1129,11 @@ function setZoom(z) {
   $('labels').className = zoom < .8 ? 'tiny' : zoom < 1.7 ? 'short' : '';   // far out: icons only
 }
 const toggleView = () => setZoom(wholeCity() ? homeZoom() : fitZoom());
-addEventListener('resize', () => setZoom(zoom));
+addEventListener('resize', () => {
+  // turning the phone switches between the tall and the wide town: load the other one
+  if (!forcedLayout && matchMedia(PORTRAIT_PHONE).matches !== TALL) { location.reload(); return; }
+  setZoom(zoom);
+});
 setZoom(homeZoom());
 
 /* ───────────── UI: list of places, name tags, tooltip, intro ───────────── */
@@ -1159,8 +1206,9 @@ $('zoom-out').addEventListener('click', e => { setZoom(zoom / 1.3); e.currentTar
 $('list-toggle').addEventListener('click', e => {
   const open = $('panel').classList.toggle('open');
   e.currentTarget.setAttribute('aria-expanded', open);
+  e.currentTarget.textContent = open ? 'Close' : 'Places';
 });
-if (innerWidth <= 640 || innerHeight <= 480) { $('panel').classList.remove('open'); $('list-toggle').setAttribute('aria-expanded', 'false'); }   // phones: list starts folded
+if (innerWidth <= 640 || innerHeight <= 480) { $('panel').classList.remove('open'); $('list-toggle').setAttribute('aria-expanded', 'false'); } else $('list-toggle').textContent = 'Close';   // phones: list starts folded
 
 const tip = $('tip');
 function showTip(s, e) {
@@ -1184,56 +1232,55 @@ function hideTip() { hover = null; tip.hidden = true; }
 const TOUCH = matchMedia('(pointer: coarse)').matches;
 $('hint').addEventListener('click', () => { const s = nearShop(); if (s) enterShop(s); });
 
-/* ───────────── The partner ship ─────────────
-   One big river ship cruises under the bridge. A row of passengers on deck hold up
-   signs, one per partner (see SPONSORS in stories.js). The ship is pixel art; each
-   sign's logo is the real image laid over the map, so it stays sharp and is a link. */
+/* ───────────── Partner boats ─────────────
+   Six boats lie still on the river, one per partner (see SPONSORS in stories.js).
+   On each, someone holds up a sign. The boat is pixel art; the logo on the sign is
+   the real image laid over the map, so it stays sharp and is a link. */
 const sponsors = window.SPONSORS || [];
-const SIGN_W = 54, SIGN_H = 21, SIGN_STEP = 58, SIGN_X0 = 18;
-const SHIP_W = SIGN_X0 + sponsors.length * SIGN_STEP + 70, SHIP_H = 54, SHIP_TOP = 708 - SHIP_H;
-const BRIDGE = [476, 532];                    // the ship (and its signs) disappear under this stretch
-function makeShip() {
-  const c = mk(SHIP_W, SHIP_H), g = c.getContext('2d'), r = rng(808), n = sponsors.length;
-  const white = '#f6f2ea', grey = '#d8d3c8', navy = '#27496d', red = '#a8323e', ink = P.out, glass = '#2a3c55';
-  // hull: stern on the left, raked bow on the right
-  for (let row = 38; row < SHIP_H; row++) {
-    const k = row - 38, left = Math.round(k * .3), right = SHIP_W - 1 - Math.round(k * 1.7);
-    px(g, row === 38 ? ink : row < 47 ? white : row < 49 ? navy : row < 52 ? grey : red, left, row, right - left, 1);
-    px(g, ink, left, row, 1, 1); px(g, ink, right - 2, row, 2, 1);
+const BOAT_W = 84, BOAT_H = 58, SIGN_W = 64, SIGN_H = 25, SIGN_X = 10;
+const BOAT_SPOTS = LAYOUT.boats;
+const HULLS = ['#b5492f', '#2f7f86', '#e3b23c', '#3d5a80', '#59a36a', '#7d4f8f'];
+function makeBoat(i) {
+  const c = mk(BOAT_W, BOAT_H), g = c.getContext('2d'), r = rng(900 + i * 7), col = HULLS[i % HULLS.length];
+  const white = '#f8f4ec', ink = P.out, cx = BOAT_W / 2;
+  // hull: flat stern on the left, bow rising on the right
+  const deckY = x => 46 - (x > BOAT_W - 30 ? Math.round(((x - (BOAT_W - 30)) / 30) ** 2 * 4) : 0);
+  const inHull = (x, y) => y >= deckY(x) && y < BOAT_H && x >= 2 + Math.round(Math.max(0, y - 48) * .5) && x <= BOAT_W - 1 - Math.round(Math.max(0, y - 42) * 1.3);
+  for (let y = 40; y < BOAT_H; y++) for (let x = 0; x < BOAT_W; x++) {
+    if (!inHull(x, y)) continue;
+    const edge = !inHull(x - 1, y) || !inHull(x + 1, y) || !inHull(x, y - 1), d = y - deckY(x);
+    px(g, edge ? ink : y >= BOAT_H - 2 ? shade(col, .55) : d < 3 ? shade(col, 1.25) : d === 5 || d === 6 ? white : col, x, y);
   }
-  for (let x = 10; x < SHIP_W - 46; x += 12) { px(g, glass, x, 41, 7, 4); px(g, '#8fb6d9', x, 41, 2, 1); }
-  // wheelhouse, mast and flags
-  const wx = SIGN_X0 + n * SIGN_STEP + 6;
-  px(g, ink, wx - 1, 19, 30, 20); px(g, white, wx, 20, 28, 18); px(g, navy, wx - 2, 17, 32, 3);
-  px(g, glass, wx + 3, 23, 9, 7); px(g, glass, wx + 15, 23, 10, 7); px(g, '#8fb6d9', wx + 3, 23, 3, 2); px(g, '#8fb6d9', wx + 15, 23, 3, 2);
-  px(g, ink, wx + 13, 3, 1, 14); px(g, red, wx + 14, 3, 8, 5);
-  px(g, ink, 4, 22, 1, 16); px(g, red, 5, 22, 8, 5);
-  // passengers: one holds up each sign with both hands, a few more stand in between
-  const skins = ['#f2c9a0', '#d9a273', '#a9714b', '#7a4a30', '#e8b98f'], hairs = ['#2a1f2b', '#4a2f24', '#8a5a2b', '#c9a24a', '#5a5a66'];
-  const tops = ['#c0392b', '#2f7f86', '#e3b23c', '#7d4f8f', '#3d5a80', '#59a36a', '#e8703a', '#d86a8f'];
+  // a little cabin at the stern on every other boat, a crate on the rest
+  if (i % 2) {
+    px(g, ink, 7, 33, 22, 14); px(g, white, 8, 34, 20, 12); px(g, shade(col, .8), 6, 31, 24, 3);
+    px(g, '#2a3c55', 11, 37, 6, 5); px(g, '#2a3c55', 19, 37, 6, 5); px(g, '#8fb6d9', 11, 37, 2, 1); px(g, '#8fb6d9', 19, 37, 2, 1);
+  } else {
+    px(g, ink, 9, 38, 14, 9); px(g, '#8f6243', 10, 39, 12, 7); px(g, '#6b4630', 10, 42, 12, 1); px(g, '#6b4630', 15, 39, 1, 7);
+  }
+  // crew
+  const skins = ['#f2c9a0', '#d9a273', '#a9714b', '#7a4a30', '#e8b98f'], hairs = ['#2a1f2b', '#4a2f24', '#8a5a2b', '#c9a24a', '#5a5a66', '#b8552f'];
+  const tops = ['#c0392b', '#2f7f86', '#e3b23c', '#7d4f8f', '#3d5a80', '#59a36a', '#e8703a', '#d86a8f'].filter(t => t !== col);
   const person = (x, holding, small) => {
-    const sk = pick(skins, r), hr = pick(hairs, r), tp = pick(tops, r), top = small ? 29 : 25;
-    px(g, hr, x - 2, top - 1, 4, 2); px(g, sk, x - 2, top + 1, 4, 3);
-    px(g, tp, x - 3, top + 4, 6, 34 - top); px(g, shade(tp, .78), x + 1, top + 4, 2, 34 - top);
-    if (holding) {
-      px(g, tp, x - 4, top + 1, 1, 5); px(g, tp, x + 3, top + 1, 1, 5); px(g, sk, x - 4, top - 1, 1, 2); px(g, sk, x + 3, top - 1, 1, 2);
-      px(g, '#5a3a28', x - 4, SIGN_H, 1, top - 1 - SIGN_H); px(g, '#5a3a28', x + 3, SIGN_H, 1, top - 1 - SIGN_H);
-    } else if (r() < .6) { px(g, tp, x + 3, top + 2, 1, 3); px(g, sk, x + 4, top, 1, 2); }     // waving
+    const sk = pick(skins, r), hr = pick(hairs, r), tp = pick(tops, r), top = small ? 36 : 31;
+    px(g, ink, x - 3, top - 1, 6, 6);
+    px(g, hr, x - 2, top, 4, 2); px(g, sk, x - 2, top + 2, 4, 3); px(g, ink, x - 1, top + 3, 1, 1); px(g, ink, x + 1, top + 3, 1, 1);
+    if (r() < .35) { const hat = pick(tops, r); px(g, hat, x - 3, top, 6, 1); px(g, hat, x - 2, top - 1, 4, 1); }
+    px(g, ink, x - 4, top + 5, 8, 47 - top - 5); px(g, tp, x - 3, top + 5, 6, 46 - top - 5); px(g, shade(tp, .78), x + 1, top + 5, 2, 46 - top - 5);
+    if (holding) for (const ax of [x - 5, x + 4]) { px(g, '#6b4630', ax, SIGN_H, 1, top - 1 - SIGN_H); px(g, sk, ax, top - 2, 1, 2); px(g, tp, ax, top, 1, 7); }
+    else { px(g, tp, x + 3, top + 4, 2, 2); px(g, tp, x + 4, top + 2, 1, 3); px(g, sk, x + 4, top, 1, 2); }             // waving
   };
-  for (let i = 0; i < n; i++) person(SIGN_X0 + i * SIGN_STEP + SIGN_W / 2 + SIGN_STEP / 2, false, r() < .35);
-  for (let i = 0; i < n; i++) person(SIGN_X0 + i * SIGN_STEP + SIGN_W / 2, true, false);
-  // railing in front of their legs
-  px(g, ink, 2, 33, wx - 2, 1); px(g, white, 2, 34, wx - 2, 1);
-  for (let x = 3; x < wx; x += 5) px(g, white, x, 35, 1, 3);
+  person(cx + 18, false, r() < .5);
+  person(cx, true, false);
+  // low railing, then the bow flag
+  for (let x = 30; x < BOAT_W - 14; x += 5) px(g, white, x, deckY(x) - 3, 1, 3);
+  px(g, ink, 30, 42, BOAT_W - 44, 1);
+  px(g, ink, BOAT_W - 6, deckY(BOAT_W - 6) - 9, 1, 9); px(g, white, BOAT_W - 11, deckY(BOAT_W - 6) - 9, 5, 3);
   muteCanvas(c);
-  for (let i = 0; i < n; i++) {                 // the sign boards stay clean white for the logos
-    const sx = SIGN_X0 + i * SIGN_STEP;
-    px(g, ink, sx, 0, SIGN_W, SIGN_H); px(g, '#fffdf8', sx + 1, 1, SIGN_W - 2, SIGN_H - 2);
-  }
+  px(g, ink, SIGN_X, 0, SIGN_W, SIGN_H); px(g, '#fffdf8', SIGN_X + 1, 1, SIGN_W - 2, SIGN_H - 2);   // clean white sign for the logo
   return c;
 }
-const ship = { img: makeShip(), x: 0, y: SHIP_TOP };
-const signEls = sponsors.map(sp => {
+const boats = sponsors.slice(0, BOAT_SPOTS.length).map((sp, i) => {
   const a = document.createElement('a');
   a.className = 'sponsor';
   a.href = sp.url; a.target = '_blank'; a.rel = 'noreferrer';
@@ -1250,7 +1297,7 @@ const signEls = sponsors.map(sp => {
   });
   a.addEventListener('pointerleave', hideTip);
   $('fleet').append(a);
-  return a;
+  return { el: a, img: makeBoat(i), x: BOAT_SPOTS[i][0] - BOAT_W / 2, y: BOAT_SPOTS[i][1] - BOAT_H };
 });
 
 /* ───────────── Input ───────────── */
@@ -1369,27 +1416,18 @@ function render() {
 
   // river sparkles + swans
   for (const s of shimmer) if (Math.sin(time * 1.6 + s.ph) > .45) px(ctx, FX.shimmer, s.x + Math.round(Math.sin(time * .4 + s.ph) * 2), s.y, s.w, 1);
-  for (const [sx, sy, ph] of [[150, 664, 0], [438, 700, 2], [716, 664, 4]]) {
+  for (const [sx, sy, ph] of LAYOUT.swans) {
     const x = Math.round(sx + Math.sin(time * .22 + ph) * 14), y = Math.round(sy + Math.sin(time * .9 + ph)), right = Math.cos(time * .22 + ph) > 0;
     px(ctx, 'rgba(20,40,80,.25)', x - 3, y + 2, 7, 1);
     px(ctx, FX.swan, x - 3, y, 6, 2); px(ctx, FX.swan, right ? x + 3 : x - 4, y - 3, 1, 4);
     px(ctx, FX.beak, right ? x + 4 : x - 5, y - 3, 1, 1);
   }
-  // the partner ship cruises left to right, passes under the bridge, and comes round again
-  if (sponsors.length) {
-    const lap = W + SHIP_W + 120;
-    ship.x = Math.round((time * 14 + SHIP_W + 90) % lap) - SHIP_W - 60;
-    ship.y = SHIP_TOP + Math.round(Math.sin(time * 1.1) * .6);
-    ctx.save(); ctx.beginPath(); ctx.rect(0, 624, W, 96); ctx.clip();
-    px(ctx, 'rgba(20,40,80,.3)', ship.x + 4, ship.y + SHIP_H - 1, SHIP_W - 34, 3);
-    ctx.drawImage(ship.img, ship.x, ship.y);
-    for (let k = 0; k < 9; k++) {             // wake behind the stern, bow wave in front
-      const wxp = ship.x - 4 - k * 7 - Math.round((time * 20) % 7);
-      ctx.globalAlpha = 1 - k / 9; px(ctx, FX.spray, wxp, ship.y + SHIP_H - 3 + (k % 2) * 2, 4, 1);
-    }
-    ctx.globalAlpha = .8; px(ctx, FX.spray, ship.x + SHIP_W - 24, ship.y + SHIP_H - 1, 6 + Math.round(Math.sin(time * 6)), 1); ctx.globalAlpha = 1;
-    ctx.restore();
-    ctx.drawImage(base, BRIDGE[0], 640, BRIDGE[1] - BRIDGE[0], 84, BRIDGE[0], 640, BRIDGE[1] - BRIDGE[0], 84);   // bridge deck goes over it
+  // partner boats (they lie still), each with a faint reflection
+  for (const bt of boats) {
+    ctx.save(); ctx.globalAlpha = .2; ctx.translate(bt.x, bt.y + BOAT_H * 1.2); ctx.scale(1, -.2);
+    ctx.drawImage(bt.img, 0, 0); ctx.restore();
+    px(ctx, 'rgba(20,40,80,.3)', bt.x + 4, bt.y + BOAT_H - 1, BOAT_W - 22, 2);
+    ctx.drawImage(bt.img, bt.x, bt.y);
   }
   // cinema marquee lights
   const tick = Math.floor(time * 5);
@@ -1397,7 +1435,7 @@ function render() {
   // fountain
   for (let i = 0; i < 6; i++) {
     const a = time * 3 + i * 1.05, t = (time * 1.4 + i / 6) % 1;
-    px(ctx, FX.spray, 512 + Math.cos(a) * (2 + t * 8), 522 + t * t * 14 - t * 4, 1, 1);
+    px(ctx, FX.spray, LAYOUT.fountain[0] + Math.cos(a) * (2 + t * 8), LAYOUT.fountain[1] - 14 + t * t * 14 - t * 4, 1, 1);
   }
   // music drifting out of the record store
   const vd = shopGeo.vinyl.door;
@@ -1436,22 +1474,16 @@ function render() {
   }
   ctx.restore();
 
-  // partner logos sit on the signs; they are cut off at the map edge and under the bridge, like the ship
-  signEls.forEach((el, i) => {
-    const a = ship.x + SIGN_X0 + i * SIGN_STEP + 1, w = SIGN_W - 2;
-    let l = Math.max(a, 0), r = Math.min(a + w, W);                       // visible stretch, in map pixels
-    if (l >= BRIDGE[0] && r <= BRIDGE[1]) r = l;                          // fully under the bridge
-    else if (l < BRIDGE[0]) r = Math.min(r, BRIDGE[0]);
-    else if (l < BRIDGE[1]) l = BRIDGE[1];
-    const sx = (a - camX) * zoom, sy = (ship.y + 1 - camY) * zoom;
-    const on = r - l > 0 && sx + w * zoom > 0 && sx < innerWidth && sy + SIGN_H * zoom > 0 && sy < innerHeight;
-    el.style.display = on ? '' : 'none';
-    if (!on) return;
-    el.style.transform = `translate(${Math.round(sx)}px, ${Math.round(sy)}px)`;
-    el.style.width = Math.round(w * zoom) + 'px'; el.style.height = Math.round((SIGN_H - 2) * zoom) + 'px';
-    el.style.padding = Math.max(1, Math.round(zoom * 1.2)) + 'px';
-    el.style.clipPath = l > a || r < a + w ? `inset(0 ${Math.round((a + w - r) * zoom)}px 0 ${Math.round((l - a) * zoom)}px)` : '';
-  });
+  // partner logos sit on the signs
+  for (const bt of boats) {
+    const sx = (bt.x + SIGN_X + 1 - camX) * zoom, sy = (bt.y + 1 - camY) * zoom, w = (SIGN_W - 2) * zoom, h = (SIGN_H - 2) * zoom;
+    const on = sx + w > 0 && sx < innerWidth && sy + h > 0 && sy < innerHeight;
+    bt.el.style.display = on ? '' : 'none';
+    if (!on) continue;
+    bt.el.style.transform = `translate(${Math.round(sx)}px, ${Math.round(sy)}px)`;
+    bt.el.style.width = Math.round(w) + 'px'; bt.el.style.height = Math.round(h) + 'px';
+    bt.el.style.padding = Math.max(1, Math.round(zoom * 1.3)) + 'px';
+  }
   // name tags: real text placed over the map, so it stays sharp at any zoom
   for (const s of shops) {
     const el = tagEls[s.id];
