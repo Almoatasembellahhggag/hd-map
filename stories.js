@@ -117,3 +117,14 @@ window.SHOPS = [
     ],
   },
 ];
+
+/* Partners and funders. Each one gets a boat on the river that carries its logo
+   and links to its website. Order = left to right along the river. */
+window.SPONSORS = [
+  { role: 'A project by', name: 'Freunde Arabischer Kunst und Kultur e.V.', logo: 'assets/sponsors/fakk-dark.png', url: 'https://www.arabischekultur.de/' },
+  { role: 'In cooperation with', name: 'Karlstorkino, Heidelberg', logo: 'assets/sponsors/karlstor-kino-dark.png', url: 'https://www.karlstorkino.de/' },
+  { role: 'Funded by', name: 'Fonds Soziokultur', logo: 'assets/sponsors/fonds-soziokultur.png', url: 'https://www.fonds-soziokultur.de/' },
+  { role: 'Funded by', name: 'Zentrum für Kulturelle Teilhabe Baden-Württemberg', logo: 'assets/sponsors/zfkt-black.svg', url: 'https://kulturelle-teilhabe-bw.de/' },
+  { role: 'Supported by', name: 'Stadt Heidelberg', logo: 'assets/sponsors/heidelberg-black-cropped.svg', url: 'https://www.heidelberg.de/' },
+  { role: 'Supported by', name: 'StudierendenRat der Universität Heidelberg', logo: 'assets/sponsors/studierendenrat.png', url: 'https://www.stura.uni-heidelberg.de/' },
+];

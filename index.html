@@ -18,6 +18,9 @@
 <!-- name tags that sit on the map, one per place with stories -->
 <div id="labels"></div>
 
+<!-- partner logos, carried by the boats on the river -->
+<div id="fleet"></div>
+
 <!-- the map legend: every place you can go into -->
 <nav id="panel" class="open" aria-label="Places with stories">
   <div class="panel-head">
@@ -56,6 +59,7 @@
       <li class="keys"><b>Zoom:</b> scroll, or use the + and − buttons</li>
       <li class="touch"><b>Zoom:</b> pinch with two fingers</li>
     </ul>
+    <p class="thanks">The boats on the river carry the partners who make this project possible.</p>
     <button id="start">Start</button>
   </div>
 </div>
@@ -63,7 +67,7 @@
 <div id="tip" hidden>
   <b id="tip-name"></b>
   <span id="tip-kind"></span>
-  <em>Click to go inside</em>
+  <em id="tip-go">Click to go inside</em>
 </div>
 
 <script src="stories.js"></script>

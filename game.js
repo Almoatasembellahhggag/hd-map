@@ -1168,9 +1168,13 @@ function showTip(s, e) {
     hover = s;
     $('tip-name').textContent = s.name;
     $('tip-kind').textContent = `${s.kind} · ${s.action}`;
+    $('tip-go').textContent = 'Click to go inside';
     tip.style.setProperty('--c', s.accent);
     tip.hidden = false;
   }
+  placeTip(e);
+}
+function placeTip(e) {
   const w = tip.offsetWidth, hh = tip.offsetHeight;
   tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, e.clientX + 16)) + 'px';
   tip.style.top = (e.clientY + 22 + hh > innerHeight ? e.clientY - hh - 12 : e.clientY + 22) + 'px';
@@ -1179,6 +1183,41 @@ function hideTip() { hover = null; tip.hidden = true; }
 
 const TOUCH = matchMedia('(pointer: coarse)').matches;
 $('hint').addEventListener('click', () => { const s = nearShop(); if (s) enterShop(s); });
+
+/* ───────────── Partner boats ─────────────
+   One boat per partner (see SPONSORS in stories.js). The boat is pixel art; the logo on
+   its banner is the real image, laid over the map so it stays sharp and is a real link. */
+const BOAT_SPOTS = [[80, 676], [215, 706], [365, 676], [640, 706], [790, 676], [935, 706]];   // [centre x, waterline y]
+const HULLS = ['#8f6243', '#3d8f8a', '#b5492f', '#3d5a80', '#6b8f3a', '#7d4f8f'];
+function makeBoat(col) {
+  const c = mk(58, 36), g = c.getContext('2d');
+  px(g, '#5a3a28', 8, 20, 2, 7); px(g, '#5a3a28', 48, 20, 2, 7);                      // two masts
+  px(g, shade(col, 1.3), 0, 26, 58, 1); px(g, col, 1, 27, 56, 2);                      // hull
+  for (let k = 0; k < 6; k++) px(g, shade(col, .8), 2 + k, 29 + k, 54 - k * 2, 1);
+  px(g, '#f6ecd4', 3, 29, 52, 1);
+  muteCanvas(c);
+  px(g, P.out, 5, 0, 48, 21); px(g, '#fffdf8', 6, 1, 46, 19);                          // white banner for the logo
+  return c;
+}
+const boats = (window.SPONSORS || []).slice(0, BOAT_SPOTS.length).map((sp, i) => {
+  const a = document.createElement('a');
+  a.className = 'sponsor';
+  a.href = sp.url; a.target = '_blank'; a.rel = 'noreferrer';
+  a.setAttribute('aria-label', `${sp.role}: ${sp.name}. Opens their website.`);
+  const img = document.createElement('img');
+  img.src = sp.logo; img.alt = ''; img.draggable = false;
+  a.append(img);
+  a.addEventListener('pointermove', e => {
+    if (e.pointerType !== 'mouse') return;
+    hover = null;
+    $('tip-name').textContent = sp.name; $('tip-kind').textContent = sp.role; $('tip-go').textContent = 'Click to open their website';
+    tip.style.setProperty('--c', '#3f86c0'); tip.hidden = false;
+    placeTip(e);
+  });
+  a.addEventListener('pointerleave', hideTip);
+  $('fleet').append(a);
+  return { sp, el: a, img: makeBoat(HULLS[i % HULLS.length]), cx: BOAT_SPOTS[i][0], wy: BOAT_SPOTS[i][1], ph: i * 1.7, x: 0, y: 0 };
+});
 
 /* ───────────── Input ───────────── */
 const keys = new Set();
@@ -1296,11 +1335,17 @@ function render() {
 
   // river sparkles + swans
   for (const s of shimmer) if (Math.sin(time * 1.6 + s.ph) > .45) px(ctx, FX.shimmer, s.x + Math.round(Math.sin(time * .4 + s.ph) * 2), s.y, s.w, 1);
-  for (const [sx, sy, ph] of [[250, 660, 0], [300, 694, 2], [760, 676, 4]]) {
-    const x = Math.round(sx + Math.sin(time * .22 + ph) * 46), y = Math.round(sy + Math.sin(time * .9 + ph)), right = Math.cos(time * .22 + ph) > 0;
+  for (const [sx, sy, ph] of [[150, 664, 0], [438, 700, 2], [716, 664, 4]]) {
+    const x = Math.round(sx + Math.sin(time * .22 + ph) * 14), y = Math.round(sy + Math.sin(time * .9 + ph)), right = Math.cos(time * .22 + ph) > 0;
     px(ctx, 'rgba(20,40,80,.25)', x - 3, y + 2, 7, 1);
     px(ctx, FX.swan, x - 3, y, 6, 2); px(ctx, FX.swan, right ? x + 3 : x - 4, y - 3, 1, 4);
     px(ctx, FX.beak, right ? x + 4 : x - 5, y - 3, 1, 1);
+  }
+  // partner boats drift and bob
+  for (const bt of boats) {
+    bt.x = Math.round(bt.cx - 29 + Math.sin(time * .12 + bt.ph) * 12); bt.y = bt.wy - 36 + Math.round(Math.sin(time * 1.3 + bt.ph));
+    px(ctx, 'rgba(20,40,80,.28)', bt.x + 3, bt.y + 35, 52, 2);
+    ctx.drawImage(bt.img, bt.x, bt.y);
   }
   // cinema marquee lights
   const tick = Math.floor(time * 5);
@@ -1347,6 +1392,13 @@ function render() {
   }
   ctx.restore();
 
+  // partner logos sit on the boats' banners
+  for (const bt of boats) {
+    const sx = (bt.x + 7 - camX) * zoom, sy = (bt.y + 2 - camY) * zoom, w = 44 * zoom, h = 17 * zoom;
+    const on = sx + w > 0 && sx < innerWidth && sy + h > 0 && sy < innerHeight;
+    bt.el.style.display = on ? '' : 'none';
+    if (on) { bt.el.style.transform = `translate(${Math.round(sx)}px, ${Math.round(sy)}px)`; bt.el.style.width = Math.round(w) + 'px'; bt.el.style.height = Math.round(h) + 'px'; bt.el.style.padding = Math.max(1, Math.round(zoom)) + 'px'; }
+  }
   // name tags: real text placed over the map, so it stays sharp at any zoom
   for (const s of shops) {
     const el = tagEls[s.id];
