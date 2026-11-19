@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Heidelbrück — a town of stories</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<canvas id="game" role="img" aria-label="Map of the town. Use the list of places to open a place with stories."></canvas>
+
+<!-- name tags that sit on the map, one per place with stories -->
+<div id="labels"></div>
+
+<!-- the map legend: every place you can go into -->
+<nav id="panel" class="open" aria-label="Places with stories">
+  <div class="panel-head">
+    <h1>Heidelbrück</h1>
+    <button id="list-toggle" aria-expanded="true" aria-controls="legend">Places</button>
+  </div>
+  <p class="panel-sub">Places with stories</p>
+  <p id="count">Visited 0 of 3</p>
+  <ul id="legend"></ul>
+  <div class="zoom" role="group" aria-label="Zoom">
+    <button id="zoom-out" aria-label="Zoom out">−</button>
+    <button id="zoom-in" aria-label="Zoom in">+</button>
+    <button id="view">Whole city</button>
+  </div>
+</nav>
+
+<div id="hint" role="status"></div>
+<div id="toast" role="status" hidden></div>
+
+<div id="intro">
+  <div class="intro-card">
+    <h1>Heidelbrück</h1>
+    <p class="lead">You are a little spirit. You collect stories.</p>
+    <p>Three places in this town have stories inside. Each one has a name tag and a strong colour:</p>
+    <ul class="what">
+      <li><span class="dot" style="--c:#d8394e"></span><b>Cinema</b> — watch videos</li>
+      <li><span class="dot" style="--c:#2f9469"></span><b>Bookstore</b> — read stories</li>
+      <li><span class="dot" style="--c:#f59a23"></span><b>Record store</b> — listen to audio</li>
+    </ul>
+    <h2>How to play</h2>
+    <ul class="how">
+      <li><b>Walk:</b> arrow keys, or click or tap the ground</li>
+      <li><b>Go inside:</b> click or tap a name tag</li>
+      <li><b>Zoom:</b> pinch, scroll, or use the + and − buttons</li>
+    </ul>
+    <button id="start">Start</button>
+  </div>
+</div>
+
+<div id="tip" hidden>
+  <b id="tip-name"></b>
+  <span id="tip-kind"></span>
+  <em>Click to go inside</em>
+</div>
+
+<script src="stories.js"></script>
+<script src="icons.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
