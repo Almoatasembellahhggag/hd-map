@@ -12,7 +12,12 @@
 
 html, body {
   height: 100%;
+  height: 100dvh;
   overflow: hidden;
+  overscroll-behavior: none;              /* no pull-to-refresh or rubber-banding */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-text-size-adjust: 100%;
   background: #1b1420;
   color: var(--ink);
   font-family: var(--font);
@@ -80,6 +85,7 @@ body.playing #labels { display: block; }
 .tag {
   position: absolute; left: 0; top: 0;
   pointer-events: auto;
+  touch-action: none;
   white-space: nowrap;
   box-shadow: 0 5px 0 rgba(0, 0, 0, .35);
 }
@@ -89,10 +95,17 @@ body.playing #labels { display: block; }
   border: 11px solid transparent; border-top-color: var(--ink); border-bottom: 0;
 }
 .tag .done { margin-left: 4px; }
+/* zoomed out: shorter tags, then icons only, so they do not pile up */
+#labels.short .tag small, #labels.tiny .tag .txt { display: none; }
+#labels.tiny .tag { padding: 4px; gap: 0; border-radius: 12px; }
+#labels.tiny .tag .chip { width: 38px; height: 38px; }
+#labels.tiny .tag .chip canvas { width: 28px; height: 28px; }
+#labels.tiny .tag .done { position: absolute; top: -12px; right: -12px; margin: 0; width: 24px; height: 24px; line-height: 24px; font-size: 15px; border: 2px solid #fff; }
+#labels.tiny .tag::after { bottom: -11px; margin-left: -8px; border-width: 8px; border-bottom: 0; }
 
 /* ---------- Panel: town name, list of places, zoom ---------- */
 #panel {
-  position: fixed; top: 12px; left: 12px; z-index: 3;
+  position: fixed; top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); z-index: 3;
   width: 300px; max-width: calc(100vw - 24px);
   padding: 14px;
   background: var(--paper);
@@ -121,8 +134,14 @@ body.playing #labels { display: block; }
   border-radius: 14px;
   box-shadow: 0 5px 0 rgba(0, 0, 0, .35);
 }
-#hint { bottom: 16px; }
-#hint:empty { display: none; }
+#hint {                  /* "go inside" button, shown when the spirit stands at a door */
+  bottom: max(16px, env(safe-area-inset-bottom));
+  min-height: 56px;
+  color: var(--paper); background: var(--ink);
+  border-color: var(--paper);
+  border-left: 14px solid var(--c, var(--paper));
+}
+#hint[hidden] { display: none; }
 #toast { top: 16px; background: #e4f6e9; }
 #toast[hidden] { display: none; }
 
@@ -152,7 +171,8 @@ body.playing #labels { display: block; }
 #intro.gone { display: none; }
 .intro-card {
   width: min(100%, 540px);
-  max-height: 94vh; overflow: auto;
+  max-height: 94vh; max-height: 94dvh; overflow: auto;
+  overscroll-behavior: contain;
   padding: 28px;
   background: var(--paper);
   border: 3px solid var(--ink);
@@ -165,6 +185,8 @@ body.playing #labels { display: block; }
 .intro-card .lead { font-size: 24px; font-weight: 700; margin-bottom: 10px; }
 .intro-card ul { list-style: none; margin-top: 8px; }
 .intro-card li { margin: 8px 0; }
+.touch { display: none; }
+@media (pointer: coarse) { .intro-card .touch { display: list-item; } .intro-card .keys { display: none; } }
 .intro-card .dot {
   display: inline-block; vertical-align: -3px;
   width: 22px; height: 22px; margin-right: 10px;
@@ -173,22 +195,38 @@ body.playing #labels { display: block; }
 }
 #start { margin-top: 20px; width: 100%; min-height: 58px; font-size: 24px; }
 
-/* ---------- Small screens: the list folds away behind a button ---------- */
-@media (max-width: 640px) {
+/* ---------- Phones (portrait or landscape) ----------
+   The list folds away behind a button; zoom buttons sit at the bottom left, in reach of a thumb. */
+@media (max-width: 640px), (max-height: 480px) {
   html, body { font-size: 18px; }
-  #panel { top: 8px; left: 8px; width: auto; padding: 10px 12px; border-radius: 14px; }
+  #panel {
+    top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left));
+    width: auto; max-width: calc(100vw - 16px);
+    padding: 8px 10px 8px 14px; border-radius: 14px;
+  }
   #panel h1 { font-size: 21px; }
-  #list-toggle { display: block; min-height: 44px; padding: 6px 12px; font-size: 18px; }
-  #panel:not(.open) .panel-sub, #panel:not(.open) #count, #panel:not(.open) #legend, #panel:not(.open) .zoom { display: none; }
-  #panel.open { right: 8px; }
-  .panel-sub { margin-top: 8px; }
+  #list-toggle { display: block; min-height: 44px; padding: 6px 14px; font-size: 18px; }
+  #panel:not(.open) .panel-sub, #panel:not(.open) #count, #panel:not(.open) #legend { display: none; }
+  #panel.open { width: min(320px, calc(100vw - 16px)); padding-bottom: 12px; max-height: calc(100dvh - 90px); overflow: auto; }
+  #panel.open .panel-sub { margin-top: 8px; }
+  #legend { margin-bottom: 0; }
+  .zoom {
+    position: fixed; z-index: 3;
+    left: max(8px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom));
+  }
+  .zoom button { border: 3px solid var(--paper); box-shadow: 0 4px 0 rgba(0, 0, 0, .35); }
+  .zoom #view { flex: none; padding: 8px 12px; font-size: 18px; }
+  #hint { bottom: calc(max(8px, env(safe-area-inset-bottom)) + 62px); width: calc(100vw - 16px); font-size: 19px; }
+  #toast { top: calc(max(8px, env(safe-area-inset-top)) + 70px); font-size: 19px; }
   .stop { gap: 8px; padding: 4px 10px 4px 4px; border-radius: 12px; }
   .stop .chip { width: 40px; height: 40px; }
   .stop .chip canvas { width: 28px; height: 28px; }
   .stop b { font-size: 19px; }
   .stop small { font-size: 16px; }
-  .intro-card { padding: 20px; font-size: 19px; }
+  .intro-card { padding: 20px; font-size: 19px; border-radius: 18px; }
   .intro-card h1 { font-size: 30px; }
+  .intro-card h2 { font-size: 21px; margin-top: 12px; }
   .intro-card .lead { font-size: 21px; }
-  #hint, #toast { font-size: 19px; }
+  .intro-card li { margin: 6px 0; }
+  #start { margin-top: 14px; }
 }

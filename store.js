@@ -89,7 +89,7 @@ function video(e) {
   const embed = yt ? `https://www.youtube-nocookie.com/embed/${yt[1]}` : vm ? `https://player.vimeo.com/video/${vm[1]}` : null;
   return h('div', { class: 'frame' }, embed
     ? h('iframe', { src: embed, title: e.title, allow: 'fullscreen; picture-in-picture', allowfullscreen: true })
-    : h('video', { src, controls: true, preload: 'metadata', poster: e.poster || null }));
+    : h('video', { src, controls: true, playsinline: true, preload: 'metadata', poster: e.poster || null }));
 }
 function audio(e) {
   const deck = h('div', { class: 'deck' }, icon());

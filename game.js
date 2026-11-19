@@ -212,18 +212,20 @@ function boat(x, y, c) {
   px(b, '#3a2a2e', x + 7, y + 1, 1, 4); px(b, '#3a2a2e', x + 12, y + 1, 1, 4);
 }
 
-/* shape of the castle mountain: height of its ridge line at a given x */
-const ridge = x => Math.round(120 + (1 - Math.cos(Math.min(1, Math.max(0, Math.abs(x - 512) - 150) / 362) * Math.PI)) / 2 * 140);
+/* the castle mountain: its summit sits left of centre */
+const PEAK = 416;
+/* height of the ridge line at a given x */
+const ridge = x => Math.round(120 + (1 - Math.cos(Math.min(1, Math.max(0, Math.abs(x - PEAK) - 150) / 362) * Math.PI)) / 2 * 140);
 /* rock ledges that step the slope (flat in the middle, curving up towards the sides) */
-const ledge = (yc, rise) => x => Math.round(yc - rise * Math.pow(Math.max(0, (Math.abs(x - 512) - 240) / 272), 2));
+const ledge = (yc, rise) => x => Math.round(yc - rise * Math.pow(Math.max(0, (Math.abs(x - PEAK) - 240) / 272), 2));
 const LEDGES = [ledge(232, 40), ledge(280, 30)];
 /* the walkable trail from the town up to the castle: [x, y, w, h, kind] */
 const TRAILS = [
-  [336, 168, 352, 16, 'terrace'],
-  [336, 184, 32, 24, 'stairs'],
-  [336, 208, 368, 16, 'path'],
-  [672, 224, 32, 24, 'stairs'],
-  [496, 248, 208, 16, 'path'],
+  [240, 168, 352, 16, 'terrace'],
+  [240, 184, 32, 24, 'stairs'],
+  [240, 208, 368, 16, 'path'],
+  [576, 224, 32, 24, 'stairs'],
+  [496, 248, 112, 16, 'path'],
   [496, 264, 32, 32, 'stairs'],
   [496, 296, 32, 24, 'path'],
 ];
@@ -780,13 +782,14 @@ function castle(dx, dy) {
     }
   });
   // retaining wall below the castle terrace (the stairs are at its left end)
-  block(368, 184, 320, 24);
-  addObj(368, 174, 320, 34, 208, g => {
-    px(g, P.sand, 368, 186, 320, 22);
-    for (let xx = 368; xx < 688; xx += 12) { px(g, P.sandD, xx, 186, 1, 7); px(g, P.sandD, xx + 6, 193, 1, 7); px(g, P.sandD, xx, 200, 1, 6); }
-    px(g, P.sandD, 368, 192, 320, 1); px(g, P.sandD, 368, 199, 320, 1); px(g, P.sandXD, 368, 206, 320, 2);
-    px(g, P.sandL, 368, 184, 320, 2); px(g, P.sandL, 368, 175, 320, 2);
-    for (let xx = 370; xx < 688; xx += 6) px(g, P.sandL, xx, 177, 2, 7);
+  const wx = 640 + dx;                                    // wall starts under the castle's left edge
+  block(wx, 184, 320, 24);
+  addObj(wx, 174, 320, 34, 208, g => {
+    px(g, P.sand, wx, 186, 320, 22);
+    for (let xx = wx; xx < wx + 320; xx += 12) { px(g, P.sandD, xx, 186, 1, 7); px(g, P.sandD, xx + 6, 193, 1, 7); px(g, P.sandD, xx, 200, 1, 6); }
+    px(g, P.sandD, wx, 192, 320, 1); px(g, P.sandD, wx, 199, 320, 1); px(g, P.sandXD, wx, 206, 320, 2);
+    px(g, P.sandL, wx, 184, 320, 2); px(g, P.sandL, wx, 175, 320, 2);
+    for (let xx = wx + 2; xx < wx + 320; xx += 6) px(g, P.sandL, xx, 177, 2, 7);
   });
 }
 
@@ -902,7 +905,7 @@ function mountainWoods() {
       const x = Math.round(xx + r() * 4 - 2), y = Math.round(yy + r() * 4 - 2);
       const img = pick(r() < .35 ? FIRS : ROUNDS, r);
       if (y < ridge(x) + 4) continue;                                  // above the ridge is sky
-      if (x > 352 && x < 672 && y < 214) continue;                     // castle and terrace
+      if (x > PEAK - 160 && x < PEAK + 160 && y < 214) continue;       // castle and terrace
       if (nearTrail(x, y)) continue;
       if (LEDGES.some(f => f(x) >= ridge(x) + 10 && y > f(x) - 2 && y < f(x) + 23)) continue;
       addSprite(img, x - 10, y - 28, y);
@@ -950,12 +953,12 @@ function build() {
   for (const id in shopGeo) shopObjs[id] = objs.find(o => o.x === shopGeo[id].x - 2 && o.y === shopGeo[id].y - 10);
 
   // landmarks
-  castle(-272, 40); oldUniversity(); church(304, 160); bridgeGate(160);
+  castle(-368, 40); oldUniversity(); church(304, 160); bridgeGate(160);
   fountain(512, 536);
   for (const [x, y] of [[456, 512], [568, 512], [456, 576], [568, 576]]) lamp(x, y);
   for (const x of [176, 400, 624, 848]) lamp(x, 622);
   bench(352, 544); bench(656, 544); bench(224, 616); bench(768, 616);
-  bench(432, 744); bench(560, 744); bench(400, 184); bench(608, 184);
+  bench(432, 744); bench(560, 744); bench(304, 184); bench(512, 184);
   for (const [x, y] of [
     [340, 520], [340, 576], [684, 520], [684, 576],              // university square
     [644, 432], [700, 440],                                      // beside the university
@@ -995,11 +998,46 @@ function iconEl(id) {
 /* ───────────── The spirit (you) ─────────────
    A little ghost doodle: a round head and three legs. It collects stories. */
 const p = { x: 504, y: 762, dir: 'd', walk: 0, moving: false };
-let target = null, stuck = 0;
+let route = null, stuck = 0, lastRouted = 0;   // route = list of points the spirit is walking along
 
 function canStand(x, y) {
   return !isSolid(x - 4, y - 5) && !isSolid(x + 3, y - 5) && !isSolid(x - 4, y - 1) && !isSolid(x + 3, y - 1);
 }
+
+/* Tap or click to walk: search the collision grid for a way there (around
+   buildings, over the bridge, up the castle stairs). If the spot itself cannot
+   be reached, go to the nearest place that can. */
+const STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+const cellFree = (i, j) => i >= 0 && j >= 0 && i < CW && j < CH && !solid[j * CW + i];
+function findRoute(tx, ty) {
+  const N = CW * CH, prev = new Int32Array(N).fill(-1), queue = new Int32Array(N);
+  const start = ((p.y - 3) / CELL | 0) * CW + (p.x / CELL | 0);
+  let head = 0, tail = 0, best = start, bestD = Infinity;
+  prev[start] = start; queue[tail++] = start;
+  while (head < tail) {
+    const c = queue[head++], ci = c % CW, cj = c / CW | 0;
+    const d = (ci * CELL + 4 - tx) ** 2 + (cj * CELL + 6 - ty) ** 2;
+    if (d < bestD) { bestD = d; best = c; }
+    for (const [dx, dy] of STEPS) {
+      const ni = ci + dx, nj = cj + dy;
+      if (!cellFree(ni, nj) || (dx && dy && (!cellFree(ni, cj) || !cellFree(ci, nj)))) continue;   // no cutting corners
+      const n = nj * CW + ni;
+      if (prev[n] === -1) { prev[n] = c; queue[tail++] = n; }
+    }
+  }
+  const pts = [];
+  for (let c = best; c !== start; c = prev[c]) pts.push({ x: (c % CW) * CELL + 4, y: (c / CW | 0) * CELL + 6 });
+  pts.reverse();
+  if (bestD < 60 && canStand(tx, ty)) pts.push({ x: tx, y: ty });        // finish exactly where you tapped
+  return pts.length ? pts : null;
+}
+/* can the spirit walk straight from a to b without bumping into anything? */
+function clearLine(ax, ay, bx, by) {
+  const n = Math.ceil(Math.hypot(bx - ax, by - ay) / 3);
+  for (let k = 1; k <= n; k++) if (!canStand(ax + (bx - ax) * k / n, ay + (by - ay) * k / n)) return false;
+  return true;
+}
+function walkTo(pt) { route = findRoute(pt.x, pt.y); stuck = 0; lastRouted = time; }
 
 const SPIRIT_ROWS = [5, 9, 11, 13, 13, 13, 13, 13, 13, 13, 13];   // width of the head, row by row
 function drawSpirit(g, x, y, dir, moving, t) {
@@ -1045,6 +1083,7 @@ function setZoom(z) {
   if (w !== vw || h !== vh) { vw = w; vh = h; cv.width = w; cv.height = h; ctx.imageSmoothingEnabled = false; }
   cv.style.width = vw * zoom + 'px'; cv.style.height = vh * zoom + 'px';
   $('view').textContent = wholeCity() ? 'Close up' : 'Whole city';
+  $('labels').className = zoom < .8 ? 'tiny' : zoom < 1.7 ? 'short' : '';   // far out: icons only
 }
 const toggleView = () => setZoom(wholeCity() ? homeZoom() : fitZoom());
 addEventListener('resize', () => setZoom(zoom));
@@ -1121,7 +1160,7 @@ $('list-toggle').addEventListener('click', e => {
   const open = $('panel').classList.toggle('open');
   e.currentTarget.setAttribute('aria-expanded', open);
 });
-if (innerWidth <= 640) { $('panel').classList.remove('open'); $('list-toggle').setAttribute('aria-expanded', 'false'); }   // phones: list starts folded
+if (innerWidth <= 640 || innerHeight <= 480) { $('panel').classList.remove('open'); $('list-toggle').setAttribute('aria-expanded', 'false'); }   // phones: list starts folded
 
 const tip = $('tip');
 function showTip(s, e) {
@@ -1137,6 +1176,9 @@ function showTip(s, e) {
   tip.style.top = (e.clientY + 22 + hh > innerHeight ? e.clientY - hh - 12 : e.clientY + 22) + 'px';
 }
 function hideTip() { hover = null; tip.hidden = true; }
+
+const TOUCH = matchMedia('(pointer: coarse)').matches;
+$('hint').addEventListener('click', () => { const s = nearShop(); if (s) enterShop(s); });
 
 /* ───────────── Input ───────────── */
 const keys = new Set();
@@ -1174,14 +1216,18 @@ const spread = () => { const [a, c] = [...fingers.values()]; return Math.hypot(a
 cv.addEventListener('pointerdown', e => {
   if (paused) return;
   fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  if (fingers.size === 2) { pinch = { d: spread(), z: zoom }; target = null; tap = null; return; }
+  if (fingers.size === 2) { pinch = { d: spread(), z: zoom }; route = null; tap = null; return; }
   const pt = toWorld(e);
-  tap = { id: e.pointerId, x: e.clientX, y: e.clientY, shop: shopAt(pt) };
-  if (!tap.shop) { target = pt; stuck = 0; }
+  tap = { id: e.pointerId, x: e.clientX, y: e.clientY, shop: shopAt(pt), drag: false };
+  if (!tap.shop) walkTo(pt);
 });
 cv.addEventListener('pointermove', e => {
   if (fingers.has(e.pointerId)) fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pinch && fingers.size === 2) { setZoom(pinch.z * spread() / pinch.d); return; }
+  if (tap && tap.id === e.pointerId) {            // finger or mouse button held down and moving: keep steering
+    if (Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 12) tap.drag = true;
+    if (tap.drag && time - lastRouted > .12) walkTo(toWorld(e));
+  }
   const s = paused ? null : shopAt(toWorld(e));
   cv.style.cursor = s ? 'pointer' : 'default';
   if (s && e.pointerType === 'mouse') showTip(s, e); else hideTip();
@@ -1190,7 +1236,7 @@ function lift(e) {
   fingers.delete(e.pointerId);
   if (fingers.size < 2) pinch = null;
   if (!tap || tap.id !== e.pointerId) return;
-  const s = tap.shop, still = Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 12;
+  const s = tap.shop, still = !tap.drag;
   tap = null;
   if (e.type === 'pointerup' && s && still && shopAt(toWorld(e)) === s) enterShop(s);
 }
@@ -1214,10 +1260,11 @@ let hintText = '';
 function update(dt) {
   if (paused) { p.moving = false; return; }
   let dx = (keys.has('r') ? 1 : 0) - (keys.has('l') ? 1 : 0), dy = (keys.has('d') ? 1 : 0) - (keys.has('u') ? 1 : 0);
-  if (dx || dy) target = null;
-  else if (target) {
-    const tx = target.x - p.x, ty = target.y - p.y, d = Math.hypot(tx, ty);
-    if (d < 2) target = null; else { dx = tx / d; dy = ty / d; }
+  if (dx || dy) route = null;
+  else if (route) {
+    while (route.length > 1 && clearLine(p.x, p.y, route[1].x, route[1].y)) route.shift();   // skip corners we can already see past
+    const tx = route[0].x - p.x, ty = route[0].y - p.y, d = Math.hypot(tx, ty);
+    if (d < 2) { route.shift(); if (!route.length) route = null; } else { dx = tx / d; dy = ty / d; }
   }
   p.moving = !!(dx || dy);
   if (p.moving) {
@@ -1227,15 +1274,15 @@ function update(dt) {
     if (canStand(p.x, p.y + sy)) p.y += sy;
     p.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'r' : 'l') : (dy > 0 ? 'd' : 'u');
     p.walk += dt;
-    if (target) {
+    if (route) {
       stuck = Math.hypot(p.x - ox, p.y - oy) < SPEED * dt * .3 ? stuck + dt : 0;
-      if (stuck > .25) target = null;
+      if (stuck > .4) route = null;
     }
   } else p.walk = 0;
 
   const s = nearShop();
-  const h = s ? `Press E to go into the ${s.kind.toLowerCase()}` : '';
-  if (h !== hintText) { hintText = h; $('hint').textContent = h; }
+  const h = s ? `${TOUCH ? 'Tap here' : 'Press E'} to go into the ${s.kind.toLowerCase()}` : '';
+  if (h !== hintText) { hintText = h; $('hint').textContent = h; $('hint').hidden = !h; if (s) $('hint').style.setProperty('--c', s.accent); }
 }
 
 const FX = { shimmer: tint(P.waterL), swan: tint('#fdfaf2'), beak: tint('#f4a836'), spray: tint('#e8f6ff') };
@@ -1293,7 +1340,11 @@ function render() {
     px(ctx, P.out, X - 5, ay - 1, 11, 5); px(ctx, P.out, X - 3, ay + 4, 7, 2); px(ctx, P.out, X - 1, ay + 6, 3, 2);
     px(ctx, P.gold, X - 4, ay, 9, 3); px(ctx, P.gold, X - 2, ay + 3, 5, 2); px(ctx, P.gold, X, ay + 5, 1, 2);
   }
-  if (target) { const a = Math.floor(time * 6) % 2; px(ctx, 'rgba(255,250,240,.85)', Math.round(target.x) - 1 - a, Math.round(target.y), 3 + a * 2, 1); px(ctx, 'rgba(255,250,240,.85)', Math.round(target.x), Math.round(target.y) - 1 - a, 1, 3 + a * 2); }
+  if (route) {              // mark where the spirit is heading
+    const t = route[route.length - 1], tx = Math.round(t.x), ty = Math.round(t.y) - 2, a = Math.floor(time * 6) % 2;
+    px(ctx, P.out, tx - 3 - a, ty - 1, 7 + a * 2, 3); px(ctx, P.out, tx - 1, ty - 3 - a, 3, 7 + a * 2);
+    px(ctx, '#fffdf6', tx - 2 - a, ty, 5 + a * 2, 1); px(ctx, '#fffdf6', tx, ty - 2 - a, 1, 5 + a * 2);
+  }
   ctx.restore();
 
   // name tags: real text placed over the map, so it stays sharp at any zoom
