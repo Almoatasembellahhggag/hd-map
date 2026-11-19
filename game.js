@@ -1184,22 +1184,56 @@ function hideTip() { hover = null; tip.hidden = true; }
 const TOUCH = matchMedia('(pointer: coarse)').matches;
 $('hint').addEventListener('click', () => { const s = nearShop(); if (s) enterShop(s); });
 
-/* ───────────── Partner boats ─────────────
-   One boat per partner (see SPONSORS in stories.js). The boat is pixel art; the logo on
-   its banner is the real image, laid over the map so it stays sharp and is a real link. */
-const BOAT_SPOTS = [[80, 676], [215, 706], [365, 676], [640, 706], [790, 676], [935, 706]];   // [centre x, waterline y]
-const HULLS = ['#8f6243', '#3d8f8a', '#b5492f', '#3d5a80', '#6b8f3a', '#7d4f8f'];
-function makeBoat(col) {
-  const c = mk(58, 36), g = c.getContext('2d');
-  px(g, '#5a3a28', 8, 20, 2, 7); px(g, '#5a3a28', 48, 20, 2, 7);                      // two masts
-  px(g, shade(col, 1.3), 0, 26, 58, 1); px(g, col, 1, 27, 56, 2);                      // hull
-  for (let k = 0; k < 6; k++) px(g, shade(col, .8), 2 + k, 29 + k, 54 - k * 2, 1);
-  px(g, '#f6ecd4', 3, 29, 52, 1);
+/* ───────────── The partner ship ─────────────
+   One big river ship cruises under the bridge. A row of passengers on deck hold up
+   signs, one per partner (see SPONSORS in stories.js). The ship is pixel art; each
+   sign's logo is the real image laid over the map, so it stays sharp and is a link. */
+const sponsors = window.SPONSORS || [];
+const SIGN_W = 54, SIGN_H = 21, SIGN_STEP = 58, SIGN_X0 = 18;
+const SHIP_W = SIGN_X0 + sponsors.length * SIGN_STEP + 70, SHIP_H = 54, SHIP_TOP = 708 - SHIP_H;
+const BRIDGE = [476, 532];                    // the ship (and its signs) disappear under this stretch
+function makeShip() {
+  const c = mk(SHIP_W, SHIP_H), g = c.getContext('2d'), r = rng(808), n = sponsors.length;
+  const white = '#f6f2ea', grey = '#d8d3c8', navy = '#27496d', red = '#a8323e', ink = P.out, glass = '#2a3c55';
+  // hull: stern on the left, raked bow on the right
+  for (let row = 38; row < SHIP_H; row++) {
+    const k = row - 38, left = Math.round(k * .3), right = SHIP_W - 1 - Math.round(k * 1.7);
+    px(g, row === 38 ? ink : row < 47 ? white : row < 49 ? navy : row < 52 ? grey : red, left, row, right - left, 1);
+    px(g, ink, left, row, 1, 1); px(g, ink, right - 2, row, 2, 1);
+  }
+  for (let x = 10; x < SHIP_W - 46; x += 12) { px(g, glass, x, 41, 7, 4); px(g, '#8fb6d9', x, 41, 2, 1); }
+  // wheelhouse, mast and flags
+  const wx = SIGN_X0 + n * SIGN_STEP + 6;
+  px(g, ink, wx - 1, 19, 30, 20); px(g, white, wx, 20, 28, 18); px(g, navy, wx - 2, 17, 32, 3);
+  px(g, glass, wx + 3, 23, 9, 7); px(g, glass, wx + 15, 23, 10, 7); px(g, '#8fb6d9', wx + 3, 23, 3, 2); px(g, '#8fb6d9', wx + 15, 23, 3, 2);
+  px(g, ink, wx + 13, 3, 1, 14); px(g, red, wx + 14, 3, 8, 5);
+  px(g, ink, 4, 22, 1, 16); px(g, red, 5, 22, 8, 5);
+  // passengers: one holds up each sign with both hands, a few more stand in between
+  const skins = ['#f2c9a0', '#d9a273', '#a9714b', '#7a4a30', '#e8b98f'], hairs = ['#2a1f2b', '#4a2f24', '#8a5a2b', '#c9a24a', '#5a5a66'];
+  const tops = ['#c0392b', '#2f7f86', '#e3b23c', '#7d4f8f', '#3d5a80', '#59a36a', '#e8703a', '#d86a8f'];
+  const person = (x, holding, small) => {
+    const sk = pick(skins, r), hr = pick(hairs, r), tp = pick(tops, r), top = small ? 29 : 25;
+    px(g, hr, x - 2, top - 1, 4, 2); px(g, sk, x - 2, top + 1, 4, 3);
+    px(g, tp, x - 3, top + 4, 6, 34 - top); px(g, shade(tp, .78), x + 1, top + 4, 2, 34 - top);
+    if (holding) {
+      px(g, tp, x - 4, top + 1, 1, 5); px(g, tp, x + 3, top + 1, 1, 5); px(g, sk, x - 4, top - 1, 1, 2); px(g, sk, x + 3, top - 1, 1, 2);
+      px(g, '#5a3a28', x - 4, SIGN_H, 1, top - 1 - SIGN_H); px(g, '#5a3a28', x + 3, SIGN_H, 1, top - 1 - SIGN_H);
+    } else if (r() < .6) { px(g, tp, x + 3, top + 2, 1, 3); px(g, sk, x + 4, top, 1, 2); }     // waving
+  };
+  for (let i = 0; i < n; i++) person(SIGN_X0 + i * SIGN_STEP + SIGN_W / 2 + SIGN_STEP / 2, false, r() < .35);
+  for (let i = 0; i < n; i++) person(SIGN_X0 + i * SIGN_STEP + SIGN_W / 2, true, false);
+  // railing in front of their legs
+  px(g, ink, 2, 33, wx - 2, 1); px(g, white, 2, 34, wx - 2, 1);
+  for (let x = 3; x < wx; x += 5) px(g, white, x, 35, 1, 3);
   muteCanvas(c);
-  px(g, P.out, 5, 0, 48, 21); px(g, '#fffdf8', 6, 1, 46, 19);                          // white banner for the logo
+  for (let i = 0; i < n; i++) {                 // the sign boards stay clean white for the logos
+    const sx = SIGN_X0 + i * SIGN_STEP;
+    px(g, ink, sx, 0, SIGN_W, SIGN_H); px(g, '#fffdf8', sx + 1, 1, SIGN_W - 2, SIGN_H - 2);
+  }
   return c;
 }
-const boats = (window.SPONSORS || []).slice(0, BOAT_SPOTS.length).map((sp, i) => {
+const ship = { img: makeShip(), x: 0, y: SHIP_TOP };
+const signEls = sponsors.map(sp => {
   const a = document.createElement('a');
   a.className = 'sponsor';
   a.href = sp.url; a.target = '_blank'; a.rel = 'noreferrer';
@@ -1216,7 +1250,7 @@ const boats = (window.SPONSORS || []).slice(0, BOAT_SPOTS.length).map((sp, i) =>
   });
   a.addEventListener('pointerleave', hideTip);
   $('fleet').append(a);
-  return { sp, el: a, img: makeBoat(HULLS[i % HULLS.length]), cx: BOAT_SPOTS[i][0], wy: BOAT_SPOTS[i][1], ph: i * 1.7, x: 0, y: 0 };
+  return a;
 });
 
 /* ───────────── Input ───────────── */
@@ -1341,11 +1375,21 @@ function render() {
     px(ctx, FX.swan, x - 3, y, 6, 2); px(ctx, FX.swan, right ? x + 3 : x - 4, y - 3, 1, 4);
     px(ctx, FX.beak, right ? x + 4 : x - 5, y - 3, 1, 1);
   }
-  // partner boats drift and bob
-  for (const bt of boats) {
-    bt.x = Math.round(bt.cx - 29 + Math.sin(time * .12 + bt.ph) * 12); bt.y = bt.wy - 36 + Math.round(Math.sin(time * 1.3 + bt.ph));
-    px(ctx, 'rgba(20,40,80,.28)', bt.x + 3, bt.y + 35, 52, 2);
-    ctx.drawImage(bt.img, bt.x, bt.y);
+  // the partner ship cruises left to right, passes under the bridge, and comes round again
+  if (sponsors.length) {
+    const lap = W + SHIP_W + 120;
+    ship.x = Math.round((time * 14 + SHIP_W + 90) % lap) - SHIP_W - 60;
+    ship.y = SHIP_TOP + Math.round(Math.sin(time * 1.1) * .6);
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 624, W, 96); ctx.clip();
+    px(ctx, 'rgba(20,40,80,.3)', ship.x + 4, ship.y + SHIP_H - 1, SHIP_W - 34, 3);
+    ctx.drawImage(ship.img, ship.x, ship.y);
+    for (let k = 0; k < 9; k++) {             // wake behind the stern, bow wave in front
+      const wxp = ship.x - 4 - k * 7 - Math.round((time * 20) % 7);
+      ctx.globalAlpha = 1 - k / 9; px(ctx, FX.spray, wxp, ship.y + SHIP_H - 3 + (k % 2) * 2, 4, 1);
+    }
+    ctx.globalAlpha = .8; px(ctx, FX.spray, ship.x + SHIP_W - 24, ship.y + SHIP_H - 1, 6 + Math.round(Math.sin(time * 6)), 1); ctx.globalAlpha = 1;
+    ctx.restore();
+    ctx.drawImage(base, BRIDGE[0], 640, BRIDGE[1] - BRIDGE[0], 84, BRIDGE[0], 640, BRIDGE[1] - BRIDGE[0], 84);   // bridge deck goes over it
   }
   // cinema marquee lights
   const tick = Math.floor(time * 5);
@@ -1392,13 +1436,22 @@ function render() {
   }
   ctx.restore();
 
-  // partner logos sit on the boats' banners
-  for (const bt of boats) {
-    const sx = (bt.x + 7 - camX) * zoom, sy = (bt.y + 2 - camY) * zoom, w = 44 * zoom, h = 17 * zoom;
-    const on = sx + w > 0 && sx < innerWidth && sy + h > 0 && sy < innerHeight;
-    bt.el.style.display = on ? '' : 'none';
-    if (on) { bt.el.style.transform = `translate(${Math.round(sx)}px, ${Math.round(sy)}px)`; bt.el.style.width = Math.round(w) + 'px'; bt.el.style.height = Math.round(h) + 'px'; bt.el.style.padding = Math.max(1, Math.round(zoom)) + 'px'; }
-  }
+  // partner logos sit on the signs; they are cut off at the map edge and under the bridge, like the ship
+  signEls.forEach((el, i) => {
+    const a = ship.x + SIGN_X0 + i * SIGN_STEP + 1, w = SIGN_W - 2;
+    let l = Math.max(a, 0), r = Math.min(a + w, W);                       // visible stretch, in map pixels
+    if (l >= BRIDGE[0] && r <= BRIDGE[1]) r = l;                          // fully under the bridge
+    else if (l < BRIDGE[0]) r = Math.min(r, BRIDGE[0]);
+    else if (l < BRIDGE[1]) l = BRIDGE[1];
+    const sx = (a - camX) * zoom, sy = (ship.y + 1 - camY) * zoom;
+    const on = r - l > 0 && sx + w * zoom > 0 && sx < innerWidth && sy + SIGN_H * zoom > 0 && sy < innerHeight;
+    el.style.display = on ? '' : 'none';
+    if (!on) return;
+    el.style.transform = `translate(${Math.round(sx)}px, ${Math.round(sy)}px)`;
+    el.style.width = Math.round(w * zoom) + 'px'; el.style.height = Math.round((SIGN_H - 2) * zoom) + 'px';
+    el.style.padding = Math.max(1, Math.round(zoom * 1.2)) + 'px';
+    el.style.clipPath = l > a || r < a + w ? `inset(0 ${Math.round((a + w - r) * zoom)}px 0 ${Math.round((l - a) * zoom)}px)` : '';
+  });
   // name tags: real text placed over the map, so it stays sharp at any zoom
   for (const s of shops) {
     const el = tagEls[s.id];

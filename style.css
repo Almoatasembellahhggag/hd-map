@@ -103,7 +103,7 @@ body.playing #labels { display: block; }
 #labels.tiny .tag .done { position: absolute; top: -12px; right: -12px; margin: 0; width: 24px; height: 24px; line-height: 24px; font-size: 15px; border: 2px solid #fff; }
 #labels.tiny .tag::after { bottom: -11px; margin-left: -8px; border-width: 8px; border-bottom: 0; }
 
-/* ---------- Partner logos on the boats ---------- */
+/* ---------- Partner logos on the signs held up on the ship ---------- */
 #fleet { position: fixed; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; display: none; }
 body.playing #fleet { display: block; }
 .sponsor { position: absolute; left: 0; top: 0; display: block; padding: 3px; pointer-events: auto; touch-action: none; }

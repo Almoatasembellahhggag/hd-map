@@ -118,8 +118,8 @@ window.SHOPS = [
   },
 ];
 
-/* Partners and funders. Each one gets a boat on the river that carries its logo
-   and links to its website. Order = left to right along the river. */
+/* Partners and funders. Each one gets a sign held up by a passenger on the big
+   river ship; the sign shows its logo and links to its website. Order = stern to bow. */
 window.SPONSORS = [
   { role: 'A project by', name: 'Freunde Arabischer Kunst und Kultur e.V.', logo: 'assets/sponsors/fakk-dark.png', url: 'https://www.arabischekultur.de/' },
   { role: 'In cooperation with', name: 'Karlstorkino, Heidelberg', logo: 'assets/sponsors/karlstor-kino-dark.png', url: 'https://www.karlstorkino.de/' },
