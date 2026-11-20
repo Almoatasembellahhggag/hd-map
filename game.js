@@ -78,7 +78,7 @@ const P = {
   out: '#2a1f2b',
   grass: '#6aa84f', hill: '#4f8a45', wood: '#3a6b35',
   leaf: '#3e7d3a', trunk: '#6b4630', trunkD: '#4e3222',
-  cob: '#c4b295', street: '#d0c0a3', plaza: '#d9ccb2', path: '#c4a574',
+  cob: '#7d7367', street: '#8a8073', plaza: '#958b7c', path: '#a98e66',
   water: '#3f86c0', waterD: '#3371a8', waterL: '#7cb8e6',
   sand: '#c0664e', sandD: '#9a4a3a', sandL: '#d98568', sandXD: '#743528',
   slate: '#5d6878', slateD: '#465061', slateL: '#7c889a',
@@ -368,7 +368,7 @@ function paintTerrain() {
     });
   }
   px(b, 'rgba(20,30,70,.28)', BX + 52, RY + 14, 7, RH - 14);
-  cobble(BX, RY, 48, RH + 8, '#cbb49a');
+  cobble(BX, RY, 48, RH + 8, '#8f8172');
   px(b, P.sandL, BX - 4, RY + 6, 4, RH - 2); px(b, P.sandD, BX - 1, RY + 6, 1, RH - 2);
   px(b, P.sandL, BX + 48, RY + 6, 4, RH - 2); px(b, P.sandXD, BX + 48, RY + 6, 1, RH - 2);
   for (let yy = RY + 6; yy < RY + RH + 4; yy += 14) { px(b, P.sandD, BX - 4, yy, 4, 1); px(b, P.sandD, BX + 48, yy, 4, 1); }
@@ -972,14 +972,22 @@ function outline(ob, col, t) {
   g.drawImage(ob.img, t, t);
   ob.img = c; ob.x -= t; ob.y -= t; ob.w += t * 2; ob.h += t * 2;
 }
-/* a coloured half-round patch of ground in front of a story place */
-function forecourt(cx, cy, rx, ry, col) {
-  for (let yy = 0; yy < ry; yy++) {
-    const half = Math.round(rx * Math.sqrt(1 - (yy / ry) ** 2));
-    b.globalAlpha = .32; px(b, col, cx - half, cy + yy, half * 2, 1);
-    b.globalAlpha = .9; px(b, col, cx - half, cy + yy, 2, 1); px(b, col, cx + half - 2, cy + yy, 2, 1);
+/* a coloured plot of ground under and in front of a story place, like a highlight on a map */
+const beacons = [];
+function plot(geo, col) {
+  const x0 = geo.x - 14, y0 = geo.y + geo.h - 30, w = geo.w + 28, h = 50;
+  const inside = (x, y) => inRounded(x, y, x0, y0, w, h, 12);
+  const ring = mk(w, h), rg = ring.getContext('2d');
+  for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) {
+    if (!inside(x, y)) continue;
+    const edge = !inside(x - 2, y) || !inside(x + 2, y) || !inside(x, y - 2) || !inside(x, y + 2);
+    px(b, edge ? shade(col, 1.2) : ((x - x0 >> 3) + (y - y0 >> 3)) % 2 ? shade(col, .78) : shade(col, .68), x, y);
+    if (edge) px(rg, '#fffdf6', x - x0, y - y0);
   }
-  b.globalAlpha = 1;
+  // the bright rim pulses; cut away whatever stands on top of it
+  rg.globalCompositeOperation = 'destination-out';
+  for (const ob of objs) if (ob.x < x0 + w && ob.x + ob.w > x0 && ob.y < y0 + h && ob.y + ob.h > y0) rg.drawImage(ob.img, ob.x - x0, ob.y - y0);
+  beacons.push({ img: ring, x: x0, y: y0 });
 }
 
 function build() {
@@ -1011,7 +1019,7 @@ function build() {
   for (const [x, y] of LAYOUT.trees) tree(x, y, false);
 
   // flatten everything onto the base map, back to front
-  for (const [x, y, w, h] of shadows) px(b, 'rgba(30,20,40,.2)', x, y, w, h);
+  for (const [x, y, w, h] of shadows) px(b, 'rgba(20,12,28,.32)', x, y, w, h);
   // tone down the colours of the terrain and of every sprite
   // (the three story places keep their full colour so they stand out)
   muteCanvas(base);
@@ -1019,9 +1027,10 @@ function build() {
   for (const img of new Set(objs.map(o => o.img))) if (!loud.has(img)) muteCanvas(img);
   for (const s of SHOPS) {
     const geo = shopGeo[s.id];
-    forecourt(geo.x + geo.w / 2, geo.y + geo.h + 1, geo.w / 2 + 8, 14, s.accent);
     outline(shopObjs[s.id], P.out, 2);
+    outline(shopObjs[s.id], '#fffdf6', 2);      // dark line, then a white edge: a sticker on the map
   }
+  for (const s of SHOPS) plot(shopGeo[s.id], s.accent);
   objs.sort((a, c) => a.baseY - c.baseY);
   for (const ob of objs) b.drawImage(ob.img, ob.x, ob.y);
 }
@@ -1445,6 +1454,9 @@ function render() {
     px(ctx, P.out, nx + 2, ny, 1, 5); px(ctx, P.out, nx, ny + 3, 3, 2); px(ctx, P.out, nx + 3, ny, 2, 1);
     ctx.globalAlpha = 1;
   }
+  // the rim of each story plot pulses gently
+  beacons.forEach((bc, i) => { ctx.globalAlpha = .3 + .5 * (.5 + .5 * Math.sin(time * 2.6 + i * 2)); ctx.drawImage(bc.img, bc.x, bc.y); });
+  ctx.globalAlpha = 1;
   // glow on the place under the cursor
   if (hover && hover.obj) {
     ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .2;
