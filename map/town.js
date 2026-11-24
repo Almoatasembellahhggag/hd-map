@@ -1,4 +1,4 @@
-/* The town as a quiet, flat map.
+/* The town as a quiet map: flat, or in 2.5D (seen in perspective, with the houses standing).
    Grey ground, river, streets and houses under a survey grid; the only colour is on
    the three places that hold stories. The spirit of stories follows the pointer.
 
@@ -68,73 +68,191 @@ const LAYOUTS = {
 const wantTall = () => forcedLayout ? forcedLayout === 'tall' : innerWidth / innerHeight < .8;
 let tall = wantTall(), L = LAYOUTS[tall ? 'tall' : 'wide'];
 
-/* ───────────── Drawing the map (one SVG) ───────────── */
-const svg = $('map');
-let world, trailEl;
-/* 2.5D view: 0 is the flat map, 1 is the town standing up (see "2.5D" further down) */
+/* ───────────── Drawing the map (one SVG) ─────────────
+   Everything is kept as points in map units and drawn through P(). P() is either the flat map,
+   or a camera that looks at the town from the south and leans back, so one drawing gives both views. */
+const svg = $('map'), NS = 'http://www.w3.org/2000/svg';
+const panel = $('stories'), tagsEl = $('tags');
+let world, trailEl, layers = {}, items = [], shown = null;
+let cam = { s: 1, x: 0, y: 0 }, camFrom = null, camTo = null, camT = 0;
+let openId = null;       // the place whose stories are showing in the panel
+/* 2.5D view: 0 is the flat map, 1 is the town standing up, seen in perspective (see "2.5D" further down) */
 let depth = 0, depthFrom = 0, depthTo = 0, depthT = 1;
-const placeH = () => 26 * L.u;                   // how tall the places with stories stand
+let view = null;                                 // the leaning camera, set by setView()
+const TILT = 52 * Math.PI / 180;                 // how far the camera leans back
+const placeH = () => 34 * L.u;                   // how tall the places with stories stand
+
+function S(tag, attrs = {}) {
+  const el = document.createElementNS(NS, tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
+
+/* A point of the map (h = its height above the ground) → where it is drawn.
+   Also the length of one map unit there, across (w) and into the distance (v), and how much it leans (sk). */
+function P(x, y, h = 0) {
+  if (!depth) return { x, y, w: 1, v: 1, sk: 0 };            // flat: map units; the camera is one transform on #world
+  const c = view, ks = c.k * cam.s;
+  y = Math.min(y, L.h + 700);                                 // nothing may end up behind the camera
+  const X = (cam.x + x * cam.s - c.ox) * c.k, Y = (cam.y + y * cam.s - c.oy) * c.k, Z = h * ks * depth;
+  const w = c.d / (c.d - Math.min(Y * c.sin + Z * c.cos, c.d * .85)), yy = Y * c.cos - Z * c.sin;
+  return { x: c.ox + X * w, y: c.oy + c.ty + yy * w, w: w * ks, v: w * ks * (c.cos + yy * w * c.sin / c.d), sk: X * w * w * ks * c.sin / c.d };
+}
+/* the leaning camera: it turns the map about a line across the town and looks from a distance d */
+function setView() {
+  const a = TILT * depth, c = view = { sin: Math.sin(a), cos: Math.cos(a), d: 1.15 * Math.max(innerWidth, innerHeight), k: 1, ty: 0,
+    ox: cam.x + L.w / 2 * cam.s, oy: cam.y + L.h * .55 * cam.s };
+  /* keep the leaning town as wide as the flat one (wider where the screen has room) and in the same spot */
+  const flat = L.w * cam.s / 2, room = (innerWidth - panelSpace()) / 2 - 10, half = flat + Math.max(0, room - flat) * depth;
+  for (let i = 0; i < 5; i++) c.k *= half / (P(L.w, L.river[1]).x - c.ox);      // the river bank spans the screen
+  const high = P(L.w / 2, L.h).y - P(L.w / 2, 0).y;
+  if (high > L.h * cam.s) c.k *= L.h * cam.s / high;
+  c.ty = cam.y + L.h * cam.s * .5 - (P(L.w / 2, 0).y + P(L.w / 2, L.h).y) / 2;
+}
+const toScreen = (x, y, h = 0) => depth ? P(x, y, h) : { x: cam.x + x * cam.s, y: cam.y + y * cam.s, w: cam.s };
+const toMap = (sx, sy) => {
+  if (!depth) return { x: (sx - cam.x) / cam.s, y: (sy - cam.y) / cam.s };
+  const c = view, a = sy - c.oy - c.ty, Y = a * c.d / Math.max(c.d * c.cos + a * c.sin, 1), X = (sx - c.ox) * (c.d - Y * c.sin) / c.d;
+  return { x: (c.ox + X / c.k - cam.x) / cam.s, y: (c.oy + Y / c.k - cam.y) / cam.s };
+};
+/* outline through points [x, y, height] */
+const trace = (pts, closed = true) => {
+  let d = '';
+  for (const q of pts) { const p = P(q[0], q[1], q[2] || 0); d += (d ? 'L' : 'M') + f(p.x) + ' ' + f(p.y); }
+  return closed ? d + 'Z' : d;
+};
+/* something small that was drawn in map units (a name, a boat, an icon): lay it on the ground at (x, y) */
+function lay(el, x, y, h = 0) {
+  if (!depth) { el.removeAttribute('transform'); return; }
+  const p = P(x, y, h), n = v => v.toFixed(5);
+  el.setAttribute('transform', `matrix(${n(p.w)} 0 ${n(p.sk)} ${n(p.v)} ${f(p.x - p.w * x - p.sk * y)} ${f(p.y - p.v * y)})`);
+}
+const quad = (x, y, w, d, h = 0) => [[x, y, h], [x + w, y, h], [x + w, y + d, h], [x, y + d, h]];
+const rounded = (x, y, w, d, rx) => {
+  const out = [];
+  for (const [ax, ay, a0] of [[x + w - rx, y + rx, -90], [x + w - rx, y + d - rx, 0], [x + rx, y + d - rx, 90], [x + rx, y + rx, 180]])
+    for (let i = 0; i <= 4; i++) { const a = (a0 + i * 22.5) * Math.PI / 180; out.push([ax + Math.cos(a) * rx, ay + Math.sin(a) * rx]); }
+  return out;
+};
+const curve = (a, b, c, e) => {
+  const out = [];
+  for (let i = 0; i <= 12; i++) { const t = i / 12, m = 1 - t; out.push([0, 1].map(j => m * m * m * a[j] + 3 * m * m * t * b[j] + 3 * m * t * t * c[j] + t * t * t * e[j])); }
+  return out;
+};
+/* the outline around a set of drawn points */
+function hull(p) {
+  p = p.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+  const turn = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x), lo = [], up = [];
+  for (const q of p) { while (lo.length > 1 && turn(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+  for (const q of p.reverse()) { while (up.length > 1 && turn(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+function project() { for (const draw of items) draw(); }
 
 function drawMap() {
-  const r = rng(11), rh = rng(29), o = [], u = L.u;
-  const X0 = -2500, X1 = L.w + 2500, Y0 = -2500, Y1 = L.h + 2500;
+  const r = rng(11), rh = rng(29), u = L.u, mid = L.w / 2;
+  const X0 = -3500, X1 = L.w + 3500, Y0 = -4500, Y1 = L.h + 2500;
   const [ry0, ry1] = L.river, [hx, hy, hrx, hry] = L.hill, [cx, cy, cs] = L.castle;
-  const rect = (cls, x, y, w, hh, extra = '') => `<rect class="${cls}" x="${f(x)}" y="${f(y)}" width="${f(w)}" height="${f(hh)}"${extra}/>`;
-  /* something that stands up in the 2.5D view: its roof rises by H and its front wall grows beneath it.
-     Each comes as [front edge, markup], so the nearer ones (lower on the map) can be drawn last. */
-  const box = (cls, x, y, w, d, H) => [y + d, `<g class="bx${cls ? ' ' + cls : ''}" style="--h:${f(H)}">${rect('wall', x, y + d - H, w, H)}${rect('roof', x, y, w, d)}</g>`];
-  const drum = (x, y, rad, H) => [y + rad, `<g class="bx" style="--h:${f(H)}"><circle class="base" cx="${f(x)}" cy="${f(y)}" r="${f(rad)}"/>${rect('wall', x - rad, y - H, rad * 2, H)}<circle class="roof" cx="${f(x)}" cy="${f(y)}" r="${f(rad)}"/></g>`];
-  const nearLast = list => list.sort((a, b) => a[0] - b[0]).map(q => q[1]).join('');
+  items = []; shown = null;
+  world = S('g', { id: 'world' });
+  const layer = cls => { const g = S('g', cls ? { class: cls } : {}); world.append(g); return g; };
+  /* from the ground up. The survey grid lies over the houses on the flat map and under them in 2.5D (applyCam moves it). */
+  const ground = layer(), grid = layer(), standing = layer(), names = layer('name'), boats = layer();
+  trailEl = S('polyline', { id: 'trail', class: 'trail', points: '' });     // where the spirit has just been
+  world.append(trailEl);
+  const places = layer();
+  layers = { grid, standing, names };
+  names.setAttribute('font-size', L.text);
+
+  const shape = (parent, cls, pts, closed = true) => {
+    const el = S('path', { class: cls });
+    parent.append(el);
+    items.push(() => el.setAttribute('d', trace(pts, closed)));
+    return el;
+  };
+  const disc = (parent, cls, x, y, rad, h = 0, ball = false) => {
+    const el = S('ellipse', { class: cls });
+    if (parent) parent.append(el);
+    items.push(() => { const p = P(x, y, h); el.setAttribute('cx', f(p.x)); el.setAttribute('cy', f(p.y)); el.setAttribute('rx', f(rad * p.w)); el.setAttribute('ry', f(rad * (ball ? p.w : p.v))); });
+    return el;
+  };
+  const label = (parent, text, x, y, anchor) => {
+    const el = S('text', { x: f(x), y: f(y) });
+    if (anchor) el.setAttribute('text-anchor', anchor);
+    el.textContent = text;
+    parent.append(el);
+    items.push(() => lay(el, x, y));
+  };
+
+  /* Things that stand up in 2.5D. They are drawn from the back of the town to the front, and in each
+     row from the edges towards the middle, so that nearer ones cover the ones behind them. */
+  const ups = [];
+  const stand = (key, x, el) => { ups.push([key, -Math.abs(x - mid), el]); return el; };
+  const box = (cls, x, y, w, d, H, key = y + d) => {
+    const g = stand(key, x + w / 2, S('g', { class: 'bx ' + cls })), e = x + w / 2 < mid ? x + w : x;      // e: the side that faces the middle
+    shape(g, 'side', [[e, y, 0], [e, y + d, 0], [e, y + d, H], [e, y, H]]);
+    shape(g, 'wall', [[x, y + d, 0], [x + w, y + d, 0], [x + w, y + d, H], [x, y + d, H]]);
+    shape(g, 'roof', quad(x, y, w, d, H));
+  };
+  const drum = (x, y, rad, h0, h1, key = y + rad) => {
+    const g = stand(key, x, S('g', { class: 'bx landmark' }));
+    disc(g, 'base', x, y, rad, h0);
+    shape(g, 'wall', [[x - rad, y, h0], [x + rad, y, h0], [x + rad, y, h1], [x - rad, y, h1]]);
+    disc(g, 'roof', x, y, rad, h1);
+  };
+  const tree = (x, y, rad) => {
+    disc(ground, 'shade', x, y, rad);
+    stand(y + rad, x, disc(null, 'wood', x, y, rad, rad + 5 * u, true));
+  };
 
   /* the castle hill: height lines and woods */
   for (let k = 5; k >= 1; k--) {
-    let d = '';
+    const pts = [];
     for (let i = 0; i < 72; i++) {
       const a = i / 72 * Math.PI * 2, m = 1 + .06 * Math.sin(3 * a + k) + .04 * Math.sin(5 * a + 2 * k);
-      d += (i ? 'L' : 'M') + f(hx + Math.cos(a) * (40 + k * hrx) * m) + ' ' + f(hy + Math.sin(a) * (24 + k * hry) * m);
+      pts.push([hx + Math.cos(a) * (40 + k * hrx) * m, hy + Math.sin(a) * (24 + k * hry) * m]);
     }
-    o.push(`<path class="contour" d="${d}Z"/>`);
+    shape(ground, 'contour', pts);
   }
-  let woods = '';
   for (let i = 0; i < 170; i++) {
     const a = r() * 6.283, d = Math.sqrt(r()), x = hx + Math.cos(a) * d * (40 + 5.3 * hrx), y = hy + Math.sin(a) * d * (24 + 5.3 * hry), rad = (6 + r() * 5) * u;
     if (y > L.rows[0] - 16 || (Math.abs(x - cx) < 112 * cs && y > cy - 54 * cs && y < cy + 68 * cs) || (Math.abs(x - cx) < 36 * u && y > cy)) continue;
-    woods += `<circle cx="${f(x)}" cy="${f(y)}" r="${f(rad)}"/>`;
+    tree(x, y, rad);
   }
-  o.push(`<g class="wood shade">${woods}</g><g class="wood tree">${woods}</g>`);
 
   /* river */
   const top = x => ry0 + 14 * Math.sin(x / 260), bot = x => ry1 + 10 * Math.sin(x / 300 + 1);
-  let d = '';
-  for (let x = X0; x <= X1; x += 50) d += (d ? 'L' : 'M') + x + ' ' + f(top(x));
-  for (let x = X1; x >= X0; x -= 50) d += 'L' + x + ' ' + f(bot(x));
-  o.push(`<path class="river" d="${d}Z"/>`);
+  const bank = [];
+  for (let x = X0; x <= X1; x += 50) bank.push([x, top(x)]);
+  for (let x = X1; x >= X0; x -= 50) bank.push([x, bot(x)]);
+  shape(ground, 'river', bank);
   for (const t of [.25, .5, .75]) {
-    d = '';
-    for (let x = X0; x <= X1; x += 50) d += (d ? 'L' : 'M') + x + ' ' + f(top(x) + (bot(x) - top(x)) * t);
-    o.push(`<path class="flow" d="${d}"/>`);
+    const pts = [];
+    for (let x = X0; x <= X1; x += 50) pts.push([x, top(x) + (bot(x) - top(x)) * t]);
+    shape(ground, 'flow', pts, false);
   }
 
   /* streets */
-  const road = (x1, y1, x2, y2, w) => `<line class="road" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke-width="${w}"/>`;
+  const road = (x1, y1, x2, y2, w) => shape(ground, 'road', x1 === x2 ? quad(x1 - w / 2, y1, w, y2 - y1) : quad(x1, y1 - w / 2, x2 - x1, w));
   const south = ry1 + 45;
-  o.push(road(X0, L.main, X1, L.main, 20), road(X0, south, X1, south, 16), road(L.bridge, L.bridgeFrom, L.bridge, ry0 - 10, 16), road(L.bridge, ry1 + 10, L.bridge, Y1, 16));
-  for (const [x1, y1, x2, y2] of L.lanes) o.push(road(x1, y1, x2, y2, 15));
-  o.push(`<path class="trailway" d="M${cx} ${f(cy + 46 * cs)}C${cx - 60} ${f(cy + (L.bridgeFrom - cy) * .4)} ${cx + 70} ${f(cy + (L.bridgeFrom - cy) * .55)} ${cx + 6} ${f(cy + (L.bridgeFrom - cy) * .78)}S${L.bridge} ${L.bridgeFrom - 30} ${L.bridge} ${L.bridgeFrom}"/>`);
+  road(X0, L.main, X1, L.main, 20); road(X0, south, X1, south, 16); road(L.bridge, L.bridgeFrom, L.bridge, ry0 - 10, 16); road(L.bridge, ry1 + 10, L.bridge, Y1, 16);
+  for (const [x1, y1, x2, y2] of L.lanes) road(x1, y1, x2, y2, 15);
+  const up = L.bridgeFrom - cy, bend = [cx + 6, cy + up * .78];
+  shape(ground, 'trailway', curve([cx, cy + 46 * cs], [cx - 60, cy + up * .4], [cx + 70, cy + up * .55], bend)
+    .concat(curve(bend, [2 * bend[0] - cx - 70, 2 * bend[1] - cy - up * .55], [L.bridge, L.bridgeFrom - 30], [L.bridge, L.bridgeFrom])), false);
 
   /* houses: a row along the top and the bottom of every block, a courtyard in between */
   const avoid = Object.values(L.places);
-  const houses = [];
   const block = (x, y, w, hh, density) => {
-    const depth = Math.min(hh / 2 - 3, 46);
+    const deep = Math.min(hh / 2 - 3, 46);
     for (const upper of [true, false]) {
       let bx = x;
       while (bx < x + w - 14) {
         let bw = 24 + r() * 34;
         if (x + w - bx - bw < 16) bw = x + w - bx;
-        const bd = depth * (.68 + r() * .32), by = upper ? y : y + hh - bd, shade = 1 + (r() * 3 | 0);
+        const bd = deep * (.68 + r() * .32), by = upper ? y : y + hh - bd, shade = 1 + (r() * 3 | 0);
         if (r() < density && !avoid.some(a => bx < a[0] + a[2] + 12 && bx + bw > a[0] - 12 && by < a[1] + a[3] + 12 && by + bd > a[1] - 12))
-          houses.push(box('h' + shade, bx, by, bw - 3, bd, (12 + rh() * 16) * u));
+          box('h' + shade, bx, by, bw - 3, bd, (16 + rh() * 24) * u, upper ? y + deep : y + hh);
         bx += bw;
       }
     }
@@ -145,74 +263,93 @@ function drawMap() {
     block(L.cols[i] + 12, L.rows[j] + 12, L.cols[i + 1] - L.cols[i] - 24, L.rows[j + 1] - L.rows[j] - 24, (j ? 1 : .6) * (i === 0 || i === nc - 1 ? .8 : 1));
   }
   for (let i = 0; i < nc; i++) block(L.cols[i] + 12, south + 20, L.cols[i + 1] - L.cols[i] - 24, 62, .55);
-  o.push(`<g class="houses">${nearLast(houses)}</g>`);
 
-  /* market square with the church and the fountain */
+  /* market square with the church (nave, two arms, tower) and the fountain */
   const sx = L.cols[L.square[0]] + 12, sy = L.rows[L.square[1]] + 12, sw = L.cols[L.square[0] + 1] - L.cols[L.square[0]] - 24, sh = L.rows[L.square[1] + 1] - L.rows[L.square[1]] - 24;
   const chx = sx + sw * .34, chy = sy + sh * .42, fx = sx + sw * .76, fy = sy + sh * .52;
-  o.push(rect('plaza', sx, sy, sw, sh, ' rx="5"'),
-    `<g class="landmark">${nearLast([box('', chx - 48, chy - 15, 92, 30, 24 * u), box('', chx + 8, chy - 31, 26, 62, 36 * u), box('', chx - 62, chy - 13, 26, 26, 18 * u)])}</g>`,
-    `<circle class="fountain" cx="${f(fx)}" cy="${f(fy)}" r="${12 * u}"/><circle class="landmark" cx="${f(fx)}" cy="${f(fy)}" r="${3.5 * u}"/>`);
-  let trees = '';
-  for (const [tx, ty] of [[.62, .2], [.9, .2], [.62, .84], [.9, .84]]) trees += `<circle cx="${f(sx + sw * tx)}" cy="${f(sy + sh * ty)}" r="${7 * u}"/>`;
+  shape(ground, 'plaza', rounded(sx, sy, sw, sh, 5));
+  box('landmark', chx + 8, chy - 31, 26, 16, 34 * u);
+  box('landmark', chx - 36, chy - 15, 80, 30, 34 * u);
+  box('landmark', chx - 62, chy - 13, 26, 26, 58 * u, chy + 15.5);
+  box('landmark', chx + 8, chy + 15, 26, 16, 34 * u);
+  disc(ground, 'fountain', fx, fy, 12 * u); disc(ground, 'landmark', fx, fy, 3.5 * u);
+  for (const [tx, ty] of [[.62, .2], [.9, .2], [.62, .84], [.9, .84]]) tree(sx + sw * tx, sy + sh * ty, 7 * u);
   const nameW = L.text * 9;
-  for (let x = L.cols[0] + 10; x < L.cols[nc]; x += 30 * u) if (x < L.bridge - 34 || x > L.bridge + 34 + nameW) trees += `<circle cx="${f(x)}" cy="${f(L.rows[nr] + 26 * u)}" r="${6 * u}"/>`;
-  o.push(`<g class="wood shade">${trees}</g><g class="wood tree">${trees}</g>`);
+  for (let x = L.cols[0] + 10; x < L.cols[nc]; x += 30 * u) if (x < L.bridge - 34 || x > L.bridge + 34 + nameW) tree(x, L.rows[nr] + 26 * u, 6 * u);
 
   /* the old bridge */
-  let piers = '';
-  for (let i = 1; i <= 4; i++) piers += rect('', L.bridge - 19, ry0 + (ry1 - ry0) * i / 5 - 5, 38, 10);
-  o.push(`<g class="landmark">${piers}<circle cx="${L.bridge - 15}" cy="${ry0 - 16}" r="9"/><circle cx="${L.bridge + 15}" cy="${ry0 - 16}" r="9"/></g>`,
-    rect('deck', L.bridge - 10, ry0 - 24, 20, ry1 - ry0 + 48));
+  for (let i = 1; i <= 4; i++) shape(ground, 'landmark', quad(L.bridge - 19, ry0 + (ry1 - ry0) * i / 5 - 5, 38, 10));
+  disc(ground, 'landmark', L.bridge - 15, ry0 - 16, 9); disc(ground, 'landmark', L.bridge + 15, ry0 - 16, 9);
+  shape(ground, 'deck', quad(L.bridge - 10, ry0 - 24, 20, ry1 - ry0 + 48));
 
-  /* the castle */
-  const c = (x, y, w, hh) => box('', cx + x * cs, cy + y * cs, w * cs, hh * cs, 24 * cs);
-  const tower = (x, y, rad) => drum(cx + x * cs, cy + y * cs, rad * cs, 38 * cs);
-  o.push(`<g class="landmark">${nearLast([c(-80, -28, 160, 22), c(-80, -28, 24, 68), c(56, -28, 24, 68), c(-80, 22, 62, 18), tower(-80, -28, 14), tower(80, -28, 14), tower(80, 42, 17)])}</g>`);
+  /* the castle: four wings and three towers. A tower rises through the roof of its wing:
+     its lower part is drawn before the wings and its upper part after them. */
+  const wing = (x, y, w, hh) => box('landmark', cx + x * cs, cy + y * cs, w * cs, hh * cs, 32 * cs);
+  const tower = (x, y, rad, low, high) => {
+    drum(cx + x * cs, cy + y * cs, rad * cs, 0, 32 * cs, low);
+    drum(cx + x * cs, cy + y * cs, rad * cs, 32 * cs, 54 * cs, high);
+  };
+  wing(-80, -28, 160, 22); wing(-80, -6, 24, 46); wing(56, -6, 24, 46); wing(-56, 22, 38, 18);
+  tower(-80, -28, 14, cy - 14 * cs, cy + 41 * cs); tower(80, -28, 14, cy - 14 * cs, cy + 41 * cs); tower(80, 42, 17, cy + 59 * cs, cy + 59.5 * cs);
 
   /* survey grid, with a letter for every column and a number for every row */
-  let grid = '', ticks = '', refs = '';
-  for (let x = Math.ceil(X0 / 100) * 100; x <= X1; x += 100) grid += `M${x} ${Y0}V${Y1}`;
-  for (let y = Math.ceil(Y0 / 100) * 100; y <= Y1; y += 100) grid += `M${X0} ${y}H${X1}`;
-  for (let x = 0; x <= L.w; x += 100) for (let y = 0; y <= L.h; y += 100) ticks += `M${x - 5} ${y}h10M${x} ${y - 5}v10`;
-  for (let i = 0; i < L.w / 100; i++) refs += `<text x="${i * 100 + 50}" y="${L.h - 9 * u}" text-anchor="middle">${String.fromCharCode(65 + i)}</text>`;
-  for (let j = 0; j < L.h / 100; j++) refs += `<text x="${9 * u}" y="${j * 100 + 50 + L.text * .3}">${j + 1}</text>`;
-  o.push(`<path class="grid" d="${grid}"/><path class="grid tick" d="${ticks}"/><g class="ref" font-size="${f(L.text * .85)}">${refs}</g>`);
+  const lines = (cls, segs) => {
+    const el = S('path', { class: cls });
+    grid.append(el);
+    items.push(() => {
+      let d = '';
+      for (const [x1, y1, x2, y2] of segs) { const a = P(x1, y1), b = P(x2, y2); d += 'M' + f(a.x) + ' ' + f(a.y) + 'L' + f(b.x) + ' ' + f(b.y); }
+      el.setAttribute('d', d);
+    });
+  };
+  const mesh = [], ticks = [];
+  for (let x = Math.ceil(X0 / 100) * 100; x <= X1; x += 100) mesh.push([x, Y0, x, Y1]);
+  for (let y = Math.ceil(Y0 / 100) * 100; y <= Y1; y += 100) mesh.push([X0, y, X1, y]);
+  for (let x = 0; x <= L.w; x += 100) for (let y = 0; y <= L.h; y += 100) ticks.push([x - 5, y, x + 5, y], [x, y - 5, x, y + 5]);
+  lines('grid', mesh); lines('grid tick', ticks);
+  const refs = S('g', { class: 'ref', 'font-size': f(L.text * .85) });
+  grid.append(refs);
+  for (let i = 0; i < L.w / 100; i++) label(refs, String.fromCharCode(65 + i), i * 100 + 50, L.h - 9 * u, 'middle');
+  for (let j = 0; j < L.h / 100; j++) label(refs, j + 1, 9 * u, j * 100 + 50 + L.text * .3);
 
   /* names on the map */
-  o.push(`<g class="name" font-size="${L.text}">
-    <text x="${f(cx + 108 * cs)}" y="${f(cy + 6 * cs)}">SCHLOSS</text>
-    <text x="${f(sx + sw * .76)}" y="${f(sy + sh - 9 * u)}" text-anchor="middle">MARKTPLATZ</text>
-    <text x="${L.bridge + 34}" y="${f(ry0 - 12 * u)}">ALTE BRÜCKE</text></g>`);
+  label(names, 'SCHLOSS', cx + 108 * cs, cy + 6 * cs);
+  label(names, 'MARKTPLATZ', sx + sw * .76, sy + sh - 9 * u, 'middle');
+  label(names, 'ALTE BRÜCKE', L.bridge + 34, ry0 - 12 * u);
 
   /* partner boats: the hull is the sign, the logo links to the partner */
   SPONSORS.slice(0, L.boats.length).forEach((sp, i) => {
     const [x, y] = L.boats[i], [bw, bh] = L.boat, n = bh * .56;
-    o.push(`<a class="boat" href="${esc(sp.url)}" target="_blank" rel="noopener" data-role="${esc(sp.role)}" data-name="${esc(sp.name)}" aria-label="${esc(sp.role + ': ' + sp.name)}">
-      <g style="animation-delay:${-i * .8}s"><path class="wake" d="M${x - 10} ${f(y + bh * .32)}h${-f(bh * .5)}M${x - 10} ${f(y + bh * .68)}h${-f(bh * .85)}"/>
+    const a = S('a', { class: 'boat', href: sp.url, target: '_blank', rel: 'noopener', 'data-role': sp.role, 'data-name': sp.name, 'aria-label': sp.role + ': ' + sp.name });
+    a.innerHTML = `<g style="animation-delay:${-i * .8}s"><path class="wake" d="M${x - 10} ${f(y + bh * .32)}h${-f(bh * .5)}M${x - 10} ${f(y + bh * .68)}h${-f(bh * .85)}"/>
       <path class="hull" d="M${x + 12} ${y}H${f(x + bw - n)}L${x + bw} ${f(y + bh / 2)}L${f(x + bw - n)} ${y + bh}H${x + 12}Q${x} ${y + bh} ${x} ${y + bh - 12}V${y + 12}Q${x} ${y} ${x + 12} ${y}Z"/>
-      <image href="${esc(sp.logo)}" x="${x + 14}" y="${y + 9}" width="${f(bw - n - 20)}" height="${bh - 18}" preserveAspectRatio="xMidYMid meet"/></g></a>`);
+      <image href="${esc(sp.logo)}" x="${x + 14}" y="${y + 9}" width="${f(bw - n - 20)}" height="${bh - 18}" preserveAspectRatio="xMidYMid meet"/></g>`;
+    boats.append(a);
+    items.push(() => lay(a, x + bw / 2, y + bh / 2));
   });
-
-  /* where the spirit has just been */
-  o.push('<polyline id="trail" class="trail" points=""/>');
 
   /* the three places with stories: the only colour on the map */
   SHOPS.forEach((s, i) => {
-    const [x, y, w, hh] = L.places[s.id], g = Math.min(w, hh) * .6, H = placeH();
-    o.push(`<g class="place" data-place="${s.id}" style="--c:${esc(s.accent)};--h:${f(H)}">
-      ${rect('pwall', x, y + hh - H, w, H, ' rx="6"')}<g class="lift">${rect('ping', x, y, w, hh, ` rx="6" style="animation-delay:${i * .9}s"`)}${rect('body', x, y, w, hh, ' rx="6"')}
-      <svg class="glyph" x="${f(x + (w - g) / 2)}" y="${f(y + (hh - g) / 2)}" width="${f(g)}" height="${f(g)}" viewBox="0 0 24 24">${window.shopIconInner(s.id)}</svg></g></g>`);
+    const [x, y, w, hh] = L.places[s.id], gl = Math.min(w, hh) * .6, H = placeH();
+    const foot = rounded(x, y, w, hh, 6), roof = foot.map(q => [q[0], q[1], H]);
+    const g = S('g', { class: 'place', 'data-place': s.id, style: `--c:${s.accent}` });
+    const wall = S('path', { class: 'pwall' }), ping = S('path', { class: 'ping', style: `animation-delay:${i * .9}s` }), body = S('path', { class: 'body' }), icon = S('g');
+    icon.innerHTML = `<svg class="glyph" x="${f(x + (w - gl) / 2)}" y="${f(y + (hh - gl) / 2)}" width="${f(gl)}" height="${f(gl)}" viewBox="0 0 24 24">${window.shopIconInner(s.id)}</svg>`;
+    g.append(wall, ping, body, icon);
+    places.append(g);
+    items.push(() => {
+      const d = trace(roof);
+      body.setAttribute('d', d); ping.setAttribute('d', d);
+      lay(icon, x + w / 2, y + hh / 2, H);
+      if (depth) wall.setAttribute('d', 'M' + hull(foot.concat(roof).map(q => P(q[0], q[1], q[2] || 0))).map(p => f(p.x) + ' ' + f(p.y)).join('L') + 'Z');
+    });
   });
 
-  svg.innerHTML = `<g id="world">${o.join('')}</g>`;
-  world = $('world'); trailEl = $('trail');
+  ups.sort((a, b) => a[0] - b[0] || a[1] - b[1]).forEach(q => standing.append(q[2]));
+  svg.replaceChildren(world);
 }
 
 /* ───────────── Camera: fit the town into the free part of the screen ───────────── */
-const panel = $('stories'), tagsEl = $('tags');
-let cam = { s: 1, x: 0, y: 0 }, camFrom = null, camTo = null, camT = 0;
-let openId = null;       // the place whose stories are showing in the panel
 const panelSpace = () => openId && !SHEET.matches ? panel.offsetWidth + 24 : 0;
 
 function camGoal() {
@@ -231,13 +368,23 @@ function camGoal() {
   return { s, x, y };
 }
 function applyCam() {
-  world.setAttribute('transform', `translate(${f(cam.x)} ${f(cam.y)}) scale(${cam.s})`);
+  const deep = depth > 0;
+  if (deep) setView();
+  if (deep !== shown) {                                      // between the flat map and 2.5D
+    if (deep) world.removeAttribute('transform');
+    world.insertBefore(layers.grid, deep ? layers.standing : layers.names);
+  }
+  if (deep) project();                                       // 2.5D: every point goes through the camera
+  else {                                                     // flat: the drawing stays as it is, the camera is one transform
+    world.setAttribute('transform', `translate(${f(cam.x)} ${f(cam.y)}) scale(${cam.s})`);
+    if (shown !== false) project();
+  }
+  shown = deep;
   tagsEl.classList.toggle('short', cam.s < .72);
   tagsEl.classList.toggle('tiny', cam.s < .3);
-  const lift = depth * placeH();
   for (const s of SHOPS) {
-    const [x, y, w] = L.places[s.id];
-    tagEls[s.id].style.transform = `translate(${f(cam.x + (x + w / 2) * cam.s)}px, ${f(cam.y + (y - lift) * cam.s - 14)}px) translate(-50%, -100%)`;
+    const [x, y, w] = L.places[s.id], p = toScreen(x + w / 2, y, placeH());
+    tagEls[s.id].style.transform = `translate(${f(p.x)}px, ${f(p.y - 14)}px) translate(-50%, -100%)`;
   }
   placePeek();
 }
@@ -246,8 +393,6 @@ function moveCam(instant) {
   if (instant || REDUCED) { cam = goal; camTo = null; applyCam(); return; }
   camFrom = { ...cam }; camTo = goal; camT = 0;
 }
-const toMap = (x, y) => ({ x: (x - cam.x) / cam.s, y: (y - cam.y) / cam.s });
-const toScreen = (x, y) => ({ x: cam.x + x * cam.s, y: cam.y + y * cam.s });
 /* where the spirit waits at a place: just beside it, so it does not stand on the icon */
 const front = id => { const [x, y, w, hh] = L.places[id]; return { x: x + w + 28 / cam.s, y: y + hh }; };
 
@@ -524,8 +669,8 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => held.delete(e.key.toLowerCase()));
 addEventListener('blur', () => held.clear());
 
-/* ───────────── 2.5D: the houses, the church, the castle and the places stand up ─────────────
-   map.css raises every roof by its height times --z and grows the front walls beneath them. */
+/* ───────────── 2.5D: the camera leans back and the town stands up ─────────────
+   depth runs from 0 to 1: it tilts the camera (setView) and gives everything its height (P). */
 const depthBtn = $('depth');
 function applyDepth() {
   svg.style.setProperty('--z', depth.toFixed(3));
@@ -565,8 +710,8 @@ function frame(ts) {
   if (held.size) {                                   // arrow keys or W A S D
     let dx = 0, dy = 0;
     for (const k of held) { dx += MOVE[k][0]; dy += MOVE[k][1]; }
-    const n = Math.hypot(dx, dy) || 1, step = 420 * dt / cam.s, a = toMap(14, 14), b = toMap(innerWidth - 14, innerHeight - 14);
-    aim({ x: clamp(to.x + dx / n * step, a.x, b.x), y: clamp(to.y + dy / n * step, a.y, b.y) }, .08);
+    const n = Math.hypot(dx, dy) || 1, step = 420 * dt / cam.s, q = toScreen(to.x + dx / n * step, to.y + dy / n * step);
+    aim(toMap(clamp(q.x, 14, innerWidth - 14), clamp(q.y, 14, innerHeight - 14)), .08);
     setHot(placeAt(to), 'keys');
   }
 
@@ -576,7 +721,7 @@ function frame(ts) {
   const sway = 1 - Math.exp(-dt / .14);              // lean and glance settle gently, at any frame rate
   lookX += (clamp(vx / 260, -1, 1) - lookX) * sway;
   tilt += (clamp(vx / 140, -7, 7) - tilt) * sway;
-  spirit.style.transform = `translate3d(${f(p.x)}px, ${f(p.y)}px, 0)`;
+  spirit.style.transform = `translate3d(${f(p.x)}px, ${f(p.y)}px, 0) scale(${(p.w / cam.s).toFixed(3)})`;       // smaller in the distance
   if (!REDUCED) {
     ghost.style.transform = `translateY(${f(Math.sin(clock * 2.4) * 3)}px) rotate(${f(tilt)}deg)`;
     eyes.setAttribute('transform', `translate(${f(lookX * 2.2)} 0)`);
@@ -584,7 +729,7 @@ function frame(ts) {
     const tail = trail[trail.length - 1];
     if (!tail || Math.hypot(tail.x - me.x, tail.y - me.y) * cam.s > 5) trail.push({ x: me.x, y: me.y, t: clock });
     while (trail.length && clock - trail[0].t > .3) trail.shift();
-    if (trail.length || lastTrail) trailEl.setAttribute('points', trail.map(q => f(q.x) + ',' + f(q.y)).join(' '));
+    if (trail.length || lastTrail) trailEl.setAttribute('points', trail.map(q => { const t = P(q.x, q.y); return f(t.x) + ',' + f(t.y); }).join(' '));
     lastTrail = trail.length;
   }
 
