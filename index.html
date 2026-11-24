@@ -3,75 +3,70 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1b1420">
-<title>Heidelbrück — a town of stories</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' rx='3' fill='%231f1724'/%3E%3Cpath d='M5 3h6v1h1v7h-1v2h-2v-2h-1v2h-1v-2h-1v2h-1v-2h-1v-7h1z' fill='%23fffdf6'/%3E%3Cpath d='M6 6h1v2h-1zM9 6h1v2h-1z' fill='%231f1724'/%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<meta name="theme-color" content="#e9e9e6">
+<title>heartblicke | A town of stories</title>
+<meta name="description" content="heartblicke: a map of a small town and the stories kept in it. Videos in the cinema, written stories in the bookstore, audio in the record store.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231d1d1b'/%3E%3Cpath d='M8 26V14a8 8 0 0 1 16 0v12l-2.7-2.5-2.6 2.5-2.7-2.5-2.7 2.5-2.6-2.5z' fill='%23fff'/%3E%3Ccircle cx='13' cy='14.5' r='1.6' fill='%231d1d1b'/%3E%3Ccircle cx='19' cy='14.5' r='1.6' fill='%231d1d1b'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="map/map.css?v=2">
 </head>
 <body>
 
-<canvas id="game" role="img" aria-label="Map of the town. Use the list of places to open a place with stories."></canvas>
+<!-- the map itself is drawn by map/town.js -->
+<svg id="map" role="img" aria-label="Map of the town. The list of places opens each place with stories."></svg>
 
 <!-- name tags that sit on the map, one per place with stories -->
-<div id="labels"></div>
+<div id="tags"></div>
 
-<!-- partner logos, carried by the boats on the river -->
-<div id="fleet"></div>
+<!-- the spirit of stories: it follows the pointer -->
+<div id="spirit" aria-hidden="true">
+  <svg viewBox="0 0 44 50" width="44" height="50">
+    <path class="sheet" d="M6 46V21a16 16 0 0 1 32 0v25l-5.3-5-5.4 5-5.3-5-5.3 5-5.4-5z"/>
+    <g class="eyes"><ellipse cx="16.5" cy="22" rx="2.5" ry="3.3"/><ellipse cx="27.5" cy="22" rx="2.5" ry="3.3"/></g>
+  </svg>
+  <i></i>
+</div>
 
-<!-- the map legend: every place you can go into -->
-<nav id="panel" class="open" aria-label="Places with stories">
-  <div class="panel-head">
-    <h1>Heidelbrück</h1>
-    <button id="list-toggle" aria-expanded="true" aria-controls="legend">Places</button>
-  </div>
-  <p class="panel-sub">Places with stories</p>
-  <p id="count">Visited 0 of 3</p>
-  <ul id="legend"></ul>
-  <div class="zoom" role="group" aria-label="Zoom">
-    <button id="zoom-out" aria-label="Zoom out">−</button>
-    <button id="zoom-in" aria-label="Zoom in">+</button>
-    <button id="view">Whole city</button>
-  </div>
+<!-- the heartblicke logo (the site menu lives on the full heartblicke site) -->
+<header id="site">
+  <a class="site-logo" href="index.html"><img src="assets/landing-heartblicke-logo.png" alt="heartblicke" width="1000" height="305"></a>
+</header>
+
+<!-- the map legend: every place that holds stories -->
+<nav id="legend" aria-label="Places with stories">
+  <h1>A town of stories</h1>
+  <p class="how"><span class="mouse">Move over a place to look inside. Click to open its stories.</span><span class="finger">Tap a place to open its stories.</span></p>
+  <ul id="places"></ul>
+  <p id="coords" aria-hidden="true"></p>
 </nav>
 
-<button id="hint" hidden></button>
-<div id="toast" role="status" hidden></div>
+<!-- the stories of the place that was clicked -->
+<aside id="stories" aria-labelledby="st-name"></aside>
 
-<div id="intro">
-  <div class="intro-card">
-    <h1>Heidelbrück</h1>
-    <p class="lead">You are a little spirit. You collect stories.</p>
-    <p>Three places in this town have stories inside. Each one has a name tag and a strong colour:</p>
-    <ul class="what">
-      <li><span class="dot" style="--c:#d8394e"></span><b>Cinema</b> — watch videos</li>
-      <li><span class="dot" style="--c:#2f9469"></span><b>Bookstore</b> — read stories</li>
-      <li><span class="dot" style="--c:#f59a23"></span><b>Record store</b> — listen to audio</li>
-    </ul>
-    <h2>How to play</h2>
-    <ul class="how">
-      <li class="keys"><b>Walk:</b> arrow keys, or click where you want to go</li>
-      <li class="touch"><b>Walk:</b> tap where you want to go</li>
-      <li class="keys"><b>Go inside:</b> click a name tag</li>
-      <li class="touch"><b>Go inside:</b> tap a name tag</li>
-      <li class="keys"><b>Zoom:</b> scroll, or use the + and − buttons</li>
-      <li class="touch"><b>Zoom:</b> pinch with two fingers</li>
-    </ul>
-    <p class="thanks">The boats on the river carry the partners who make this project possible.</p>
-    <button id="start">Start</button>
+<!-- preview shown while the pointer is over a place -->
+<div id="peek" hidden aria-hidden="true">
+  <div class="peek-media"></div>
+  <div class="peek-prog"><i></i></div>
+  <div class="peek-text">
+    <p class="peek-kicker"></p>
+    <p class="peek-title"></p>
+    <p class="peek-meta"></p>
+    <p class="peek-go"></p>
   </div>
 </div>
 
-<div id="tip" hidden>
-  <b id="tip-name"></b>
-  <span id="tip-kind"></span>
-  <em id="tip-go">Click to go inside</em>
-</div>
+<!-- name of a partner, shown over its boat -->
+<div id="tip" hidden aria-hidden="true"></div>
 
-<script src="stories.js"></script>
-<script src="icons.js"></script>
-<script src="game.js"></script>
+<noscript>
+  <p class="plain">
+    <a href="store.html?shop=cinema">Cinema: watch videos</a>
+    <a href="store.html?shop=books">Bookstore: read stories</a>
+    <a href="store.html?shop=vinyl">Record store: listen to audio</a>
+  </p>
+</noscript>
+
+<script src="map/stories.js?v=3"></script>
+<script src="map/icons.js?v=2"></script>
+<script src="map/town.js?v=2"></script>
 </body>
 </html>
