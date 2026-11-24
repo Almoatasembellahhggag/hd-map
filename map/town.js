@@ -71,12 +71,20 @@ let tall = wantTall(), L = LAYOUTS[tall ? 'tall' : 'wide'];
 /* ───────────── Drawing the map (one SVG) ───────────── */
 const svg = $('map');
 let world, trailEl;
+/* 2.5D view: 0 is the flat map, 1 is the town standing up (see "2.5D" further down) */
+let depth = 0, depthFrom = 0, depthTo = 0, depthT = 1;
+const placeH = () => 26 * L.u;                   // how tall the places with stories stand
 
 function drawMap() {
-  const r = rng(11), o = [], u = L.u;
+  const r = rng(11), rh = rng(29), o = [], u = L.u;
   const X0 = -2500, X1 = L.w + 2500, Y0 = -2500, Y1 = L.h + 2500;
   const [ry0, ry1] = L.river, [hx, hy, hrx, hry] = L.hill, [cx, cy, cs] = L.castle;
   const rect = (cls, x, y, w, hh, extra = '') => `<rect class="${cls}" x="${f(x)}" y="${f(y)}" width="${f(w)}" height="${f(hh)}"${extra}/>`;
+  /* something that stands up in the 2.5D view: its roof rises by H and its front wall grows beneath it.
+     Each comes as [front edge, markup], so the nearer ones (lower on the map) can be drawn last. */
+  const box = (cls, x, y, w, d, H) => [y + d, `<g class="bx${cls ? ' ' + cls : ''}" style="--h:${f(H)}">${rect('wall', x, y + d - H, w, H)}${rect('roof', x, y, w, d)}</g>`];
+  const drum = (x, y, rad, H) => [y + rad, `<g class="bx" style="--h:${f(H)}"><circle class="base" cx="${f(x)}" cy="${f(y)}" r="${f(rad)}"/>${rect('wall', x - rad, y - H, rad * 2, H)}<circle class="roof" cx="${f(x)}" cy="${f(y)}" r="${f(rad)}"/></g>`];
+  const nearLast = list => list.sort((a, b) => a[0] - b[0]).map(q => q[1]).join('');
 
   /* the castle hill: height lines and woods */
   for (let k = 5; k >= 1; k--) {
@@ -93,7 +101,7 @@ function drawMap() {
     if (y > L.rows[0] - 16 || (Math.abs(x - cx) < 112 * cs && y > cy - 54 * cs && y < cy + 68 * cs) || (Math.abs(x - cx) < 36 * u && y > cy)) continue;
     woods += `<circle cx="${f(x)}" cy="${f(y)}" r="${f(rad)}"/>`;
   }
-  o.push(`<g class="wood">${woods}</g>`);
+  o.push(`<g class="wood shade">${woods}</g><g class="wood tree">${woods}</g>`);
 
   /* river */
   const top = x => ry0 + 14 * Math.sin(x / 260), bot = x => ry1 + 10 * Math.sin(x / 300 + 1);
@@ -116,7 +124,7 @@ function drawMap() {
 
   /* houses: a row along the top and the bottom of every block, a courtyard in between */
   const avoid = Object.values(L.places);
-  let houses = '';
+  const houses = [];
   const block = (x, y, w, hh, density) => {
     const depth = Math.min(hh / 2 - 3, 46);
     for (const upper of [true, false]) {
@@ -126,7 +134,7 @@ function drawMap() {
         if (x + w - bx - bw < 16) bw = x + w - bx;
         const bd = depth * (.68 + r() * .32), by = upper ? y : y + hh - bd, shade = 1 + (r() * 3 | 0);
         if (r() < density && !avoid.some(a => bx < a[0] + a[2] + 12 && bx + bw > a[0] - 12 && by < a[1] + a[3] + 12 && by + bd > a[1] - 12))
-          houses += rect('h' + shade, bx, by, bw - 3, bd);
+          houses.push(box('h' + shade, bx, by, bw - 3, bd, (12 + rh() * 16) * u));
         bx += bw;
       }
     }
@@ -137,19 +145,19 @@ function drawMap() {
     block(L.cols[i] + 12, L.rows[j] + 12, L.cols[i + 1] - L.cols[i] - 24, L.rows[j + 1] - L.rows[j] - 24, (j ? 1 : .6) * (i === 0 || i === nc - 1 ? .8 : 1));
   }
   for (let i = 0; i < nc; i++) block(L.cols[i] + 12, south + 20, L.cols[i + 1] - L.cols[i] - 24, 62, .55);
-  o.push(`<g class="houses">${houses}</g>`);
+  o.push(`<g class="houses">${nearLast(houses)}</g>`);
 
   /* market square with the church and the fountain */
   const sx = L.cols[L.square[0]] + 12, sy = L.rows[L.square[1]] + 12, sw = L.cols[L.square[0] + 1] - L.cols[L.square[0]] - 24, sh = L.rows[L.square[1] + 1] - L.rows[L.square[1]] - 24;
   const chx = sx + sw * .34, chy = sy + sh * .42, fx = sx + sw * .76, fy = sy + sh * .52;
   o.push(rect('plaza', sx, sy, sw, sh, ' rx="5"'),
-    `<g class="landmark">${rect('', chx - 48, chy - 15, 92, 30)}${rect('', chx + 8, chy - 31, 26, 62)}${rect('', chx - 62, chy - 13, 26, 26)}</g>`,
+    `<g class="landmark">${nearLast([box('', chx - 48, chy - 15, 92, 30, 24 * u), box('', chx + 8, chy - 31, 26, 62, 36 * u), box('', chx - 62, chy - 13, 26, 26, 18 * u)])}</g>`,
     `<circle class="fountain" cx="${f(fx)}" cy="${f(fy)}" r="${12 * u}"/><circle class="landmark" cx="${f(fx)}" cy="${f(fy)}" r="${3.5 * u}"/>`);
   let trees = '';
   for (const [tx, ty] of [[.62, .2], [.9, .2], [.62, .84], [.9, .84]]) trees += `<circle cx="${f(sx + sw * tx)}" cy="${f(sy + sh * ty)}" r="${7 * u}"/>`;
   const nameW = L.text * 9;
   for (let x = L.cols[0] + 10; x < L.cols[nc]; x += 30 * u) if (x < L.bridge - 34 || x > L.bridge + 34 + nameW) trees += `<circle cx="${f(x)}" cy="${f(L.rows[nr] + 26 * u)}" r="${6 * u}"/>`;
-  o.push(`<g class="wood">${trees}</g>`);
+  o.push(`<g class="wood shade">${trees}</g><g class="wood tree">${trees}</g>`);
 
   /* the old bridge */
   let piers = '';
@@ -158,9 +166,9 @@ function drawMap() {
     rect('deck', L.bridge - 10, ry0 - 24, 20, ry1 - ry0 + 48));
 
   /* the castle */
-  const c = (x, y, w, hh) => rect('', cx + x * cs, cy + y * cs, w * cs, hh * cs);
-  const tower = (x, y, rad) => `<circle cx="${f(cx + x * cs)}" cy="${f(cy + y * cs)}" r="${f(rad * cs)}"/>`;
-  o.push(`<g class="landmark">${c(-80, -28, 160, 22)}${c(-80, -28, 24, 68)}${c(56, -28, 24, 68)}${c(-80, 22, 62, 18)}${tower(-80, -28, 14)}${tower(80, -28, 14)}${tower(80, 42, 17)}</g>`);
+  const c = (x, y, w, hh) => box('', cx + x * cs, cy + y * cs, w * cs, hh * cs, 24 * cs);
+  const tower = (x, y, rad) => drum(cx + x * cs, cy + y * cs, rad * cs, 38 * cs);
+  o.push(`<g class="landmark">${nearLast([c(-80, -28, 160, 22), c(-80, -28, 24, 68), c(56, -28, 24, 68), c(-80, 22, 62, 18), tower(-80, -28, 14), tower(80, -28, 14), tower(80, 42, 17)])}</g>`);
 
   /* survey grid, with a letter for every column and a number for every row */
   let grid = '', ticks = '', refs = '';
@@ -191,10 +199,10 @@ function drawMap() {
 
   /* the three places with stories: the only colour on the map */
   SHOPS.forEach((s, i) => {
-    const [x, y, w, hh] = L.places[s.id], g = Math.min(w, hh) * .6;
-    o.push(`<g class="place" data-place="${s.id}" style="--c:${esc(s.accent)}">
-      ${rect('ping', x, y, w, hh, ` rx="6" style="animation-delay:${i * .9}s"`)}${rect('body', x, y, w, hh, ' rx="6"')}
-      <svg class="glyph" x="${f(x + (w - g) / 2)}" y="${f(y + (hh - g) / 2)}" width="${f(g)}" height="${f(g)}" viewBox="0 0 24 24">${window.shopIconInner(s.id)}</svg></g>`);
+    const [x, y, w, hh] = L.places[s.id], g = Math.min(w, hh) * .6, H = placeH();
+    o.push(`<g class="place" data-place="${s.id}" style="--c:${esc(s.accent)};--h:${f(H)}">
+      ${rect('pwall', x, y + hh - H, w, H, ' rx="6"')}<g class="lift">${rect('ping', x, y, w, hh, ` rx="6" style="animation-delay:${i * .9}s"`)}${rect('body', x, y, w, hh, ' rx="6"')}
+      <svg class="glyph" x="${f(x + (w - g) / 2)}" y="${f(y + (hh - g) / 2)}" width="${f(g)}" height="${f(g)}" viewBox="0 0 24 24">${window.shopIconInner(s.id)}</svg></g></g>`);
   });
 
   svg.innerHTML = `<g id="world">${o.join('')}</g>`;
@@ -226,9 +234,10 @@ function applyCam() {
   world.setAttribute('transform', `translate(${f(cam.x)} ${f(cam.y)}) scale(${cam.s})`);
   tagsEl.classList.toggle('short', cam.s < .72);
   tagsEl.classList.toggle('tiny', cam.s < .3);
+  const lift = depth * placeH();
   for (const s of SHOPS) {
     const [x, y, w] = L.places[s.id];
-    tagEls[s.id].style.transform = `translate(${f(cam.x + (x + w / 2) * cam.s)}px, ${f(cam.y + y * cam.s - 14)}px) translate(-50%, -100%)`;
+    tagEls[s.id].style.transform = `translate(${f(cam.x + (x + w / 2) * cam.s)}px, ${f(cam.y + (y - lift) * cam.s - 14)}px) translate(-50%, -100%)`;
   }
   placePeek();
 }
@@ -515,6 +524,22 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => held.delete(e.key.toLowerCase()));
 addEventListener('blur', () => held.clear());
 
+/* ───────────── 2.5D: the houses, the church, the castle and the places stand up ─────────────
+   map.css raises every roof by its height times --z and grows the front walls beneath them. */
+const depthBtn = $('depth');
+function applyDepth() {
+  svg.style.setProperty('--z', depth.toFixed(3));
+  svg.classList.toggle('deep', depth > 0);
+  applyCam();
+}
+function setDepth(on, instant) {
+  depthFrom = depth; depthTo = on ? 1 : 0; depthT = instant || REDUCED ? 1 : 0;
+  if (depthT === 1) { depth = depthTo; applyDepth(); }
+  if (depthBtn) depthBtn.setAttribute('aria-pressed', String(on));
+  try { localStorage.setItem('heartblicke-depth', on ? '1' : '0'); } catch (e) {}
+}
+if (depthBtn) depthBtn.addEventListener('click', () => setDepth(depthTo === 0));
+
 /* ───────────── Every frame ───────────── */
 const coords = $('coords');
 let last = 0, clock = 0, coordText = '';
@@ -528,6 +553,13 @@ function frame(ts) {
     cam = { s: camFrom.s + (camTo.s - camFrom.s) * k, x: camFrom.x + (camTo.x - camFrom.x) * k, y: camFrom.y + (camTo.y - camFrom.y) * k };
     if (camT === 1) camTo = null;
     applyCam();
+  }
+
+  if (depthT < 1) {                                  // the town standing up, or lying down again
+    depthT = Math.min(1, depthT + dt / .7);
+    const k = depthT < .5 ? 4 * depthT ** 3 : 1 - (2 - 2 * depthT) ** 3 / 2;
+    depth = depthFrom + (depthTo - depthFrom) * k;
+    applyDepth();
   }
 
   if (held.size) {                                   // arrow keys or W A S D
@@ -585,6 +617,9 @@ SHEET.addEventListener('change', () => moveCam(true));
 build();
 panel.inert = true;
 moveCam(true);
+let standing = false;
+try { standing = localStorage.getItem('heartblicke-depth') === '1'; } catch (e) {}
+if (standing) setDepth(true, true);
 const from = shopOf(params.get('from'));
 if (from) {                                          // coming back from a story: its place is open again
   openPlace(from.id, false, true);

@@ -54,15 +54,15 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .flow { fill: none; stroke: #bcc0c2; stroke-width: 1; stroke-dasharray: 16 12; vector-effect: non-scaling-stroke; }
 .road { stroke: #f8f8f6; }
 .trailway { fill: none; stroke: #a9a9a5; stroke-width: 1.5; stroke-dasharray: 5 5; vector-effect: non-scaling-stroke; }
-.houses .h1 { fill: #c8c8c4; }
-.houses .h2 { fill: #bfbfbb; }
-.houses .h3 { fill: #d0d0cc; }
+.houses .h1 { fill: #c8c8c4; --wall: #a9a9a4; }
+.houses .h2 { fill: #bfbfbb; --wall: #a0a09b; }
+.houses .h3 { fill: #d0d0cc; --wall: #b1b1ac; }
 .plaza { fill: #f3f3f0; }
-.landmark { fill: #a2a29e; }
+.landmark { fill: #a2a29e; --wall: #81817c; }
 .fountain { fill: #d1d4d5; stroke: #a2a29e; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .deck { fill: #f8f8f6; stroke: #8c8c88; stroke-width: 1; vector-effect: non-scaling-stroke; }
-.grid { fill: none; stroke: var(--ink); stroke-opacity: .07; stroke-width: 1; vector-effect: non-scaling-stroke; }
-.grid.tick { stroke-opacity: .32; }
+.grid { fill: none; stroke: var(--ink); stroke-opacity: calc(.07 - var(--z, 0) * .035); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.grid.tick { stroke-opacity: calc(.32 - var(--z, 0) * .16); }
 .ref { fill: #85857f; font-family: var(--mono); }
 .name { fill: #6a6a66; font-family: var(--font); font-weight: 700; letter-spacing: .16em; }
 .trail { fill: none; stroke: var(--ink); stroke-opacity: .45; stroke-width: 2.5; stroke-dasharray: .1 7; stroke-linecap: round; vector-effect: non-scaling-stroke; pointer-events: none; }
@@ -85,6 +85,28 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .place .glyph { color: var(--ink); pointer-events: none; overflow: visible; }
 .place.hot .body, .place.open .body { stroke-width: 3.5; }
 @keyframes ping { from { transform: scale(1); opacity: .9; } to { transform: scale(1.75); opacity: 0; } }
+
+/* 2.5D view: town.js sets --z on the map, from 0 (flat) to 1 (standing).
+   Roofs rise by their height --h, front walls grow beneath them, trees lift off their shadows. */
+.bx .roof, .place .lift { transform: translateY(calc(var(--h) * var(--z, 0) * -1px)); }
+.bx .wall, .place .pwall { transform-box: fill-box; transform-origin: 50% 100%; transform: scaleY(var(--z, 0)); }
+.bx .wall, .bx .base { fill: var(--wall); }
+.place .pwall { fill: color-mix(in srgb, var(--c) 64%, #1d1d1b); stroke: var(--ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.wood.tree { transform: translateY(calc(var(--z, 0) * -7px)); }
+.wood.shade { fill: #1d1d1b; opacity: calc(var(--z, 0) * .08); }
+#map:not(.deep) :is(.wall, .base, .pwall, .wood.shade) { visibility: hidden; }
+
+/* the button that stands the town up */
+#depth {
+  position: fixed; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); z-index: 4;
+  display: flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 6px 14px 6px 9px;
+  font-size: 17px; font-weight: 700;
+  background: var(--card); border: 1.5px solid var(--ink); border-radius: 12px; box-shadow: 0 6px 22px rgba(0, 0, 0, .1);
+}
+#depth svg { flex: none; display: block; width: 26px; height: 26px; }
+#depth:hover { background: #ececea; }
+#depth[aria-pressed="true"] { color: #fff; background: var(--ink); }
 
 @media (hover: hover) and (pointer: fine) {
   #map, #map a, .tag { cursor: none; }        /* the spirit is the pointer here */
@@ -298,6 +320,7 @@ body.ready #spirit { opacity: 1; }
   .stop .nm, .stop small { display: none; }
   .stop .kd { display: block; font-size: 15px; }
   #coords { display: none; }
+  #depth { bottom: auto; top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); min-height: 52px; padding: 5px 12px 5px 8px; }
 }
 @media (max-height: 480px) and (min-width: 721px) {
   #legend { right: auto; }
