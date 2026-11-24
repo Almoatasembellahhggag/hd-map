@@ -469,7 +469,7 @@ function closePanel(byKeyboard) {
 
 /* ───────────── The spirit of stories: it is the pointer ───────────── */
 const spirit = $('spirit'), ghost = spirit.querySelector('svg'), eyes = spirit.querySelector('.eyes');
-const FAST = .045, SLOW = .22;                 // how quickly it catches up (seconds)
+const FAST = .11, SLOW = .22;                  // how quickly it catches up (seconds)
 const me = { x: L.start[0], y: L.start[1] }, to = { ...me };   // where it is and where it is heading, in map units
 let tau = FAST, trail = [], lastTrail = 0, lookX = 0, tilt = 0;
 function aim(pt, speed) { to.x = pt.x; to.y = pt.y; tau = speed; }
@@ -541,8 +541,9 @@ function frame(ts) {
   const ease = REDUCED ? 1 : 1 - Math.exp(-dt / tau), px = me.x;
   me.x += (to.x - me.x) * ease; me.y += (to.y - me.y) * ease;
   const vx = dt ? (me.x - px) * cam.s / dt : 0, p = toScreen(me.x, me.y);
-  lookX += (clamp(vx / 220, -1, 1) - lookX) * .15;
-  tilt += (clamp(vx / 60, -12, 12) - tilt) * .15;
+  const sway = 1 - Math.exp(-dt / .14);              // lean and glance settle gently, at any frame rate
+  lookX += (clamp(vx / 260, -1, 1) - lookX) * sway;
+  tilt += (clamp(vx / 140, -7, 7) - tilt) * sway;
   spirit.style.transform = `translate3d(${f(p.x)}px, ${f(p.y)}px, 0)`;
   if (!REDUCED) {
     ghost.style.transform = `translateY(${f(Math.sin(clock * 2.4) * 3)}px) rotate(${f(tilt)}deg)`;
@@ -550,7 +551,7 @@ function frame(ts) {
     /* a dotted line where it has just been */
     const tail = trail[trail.length - 1];
     if (!tail || Math.hypot(tail.x - me.x, tail.y - me.y) * cam.s > 5) trail.push({ x: me.x, y: me.y, t: clock });
-    while (trail.length && clock - trail[0].t > .9) trail.shift();
+    while (trail.length && clock - trail[0].t > .3) trail.shift();
     if (trail.length || lastTrail) trailEl.setAttribute('points', trail.map(q => f(q.x) + ',' + f(q.y)).join(' '));
     lastTrail = trail.length;
   }
